@@ -1,6 +1,6 @@
 /**
- * GLPI Task Draft Saver - content.js (Interactive UI Edition)
- * Automatically saves drafts and provides a UI to restore them manually.
+ * GLPI Task Draft Saver - content.js (Clipboard & Restore Edition)
+ * Automatically saves drafts and provides UI to restore or copy them to clipboard.
  */
 
 (function () {
@@ -9,7 +9,6 @@
   // 1. Global Guard
   const INSTANCE_ID = Date.now();
   if (window.__GLPI_DRAFT_SAVER_ACTIVE__) {
-      console.log(`[GLPI Draft Saver] Instance ${INSTANCE_ID} aborted. Already active.`);
       return;
   }
   window.__GLPI_DRAFT_SAVER_ACTIVE__ = true;
@@ -19,7 +18,7 @@
   const AUTOSAVE_INTERVAL_MS = 5000;
   const DEBOUNCE_DELAY_MS = 1000;
   const MIN_CONTENT_LENGTH = 10;
-  const TOAST_SUCCESS_MS = 3000; // Time for "Draft saved" toast
+  const TOAST_SUCCESS_MS = 3000;
   const POLLING_INTERVAL_MS = 1000;
   const POLLING_MAX_TIME_MS = 30000;
 
@@ -52,8 +51,6 @@
    * Main entry point
    */
   function init() {
-    log('Script initialized. Path:', window.location.pathname);
-    
     if (window.location.pathname !== TARGET_PATHNAME) return;
 
     ticketId = getValidatedTicketId();
@@ -69,8 +66,6 @@
     if (isPolling) return;
     isPolling = true;
     pollingStartTime = Date.now();
-
-    log('Starting TinyMCE detection...');
 
     const poll = setInterval(() => {
       const textareas = Array.from(document.querySelectorAll('textarea[name="content"][id]'));
@@ -91,7 +86,6 @@
               tinymceEditor = editor;
               clearInterval(poll);
               isPolling = false;
-              log(`Success: Found Task editor [${taskTextarea.id}].`);
               onEditorFound();
             }
           }
@@ -101,13 +95,12 @@
       if (isPolling && (Date.now() - pollingStartTime > POLLING_MAX_TIME_MS)) {
         clearInterval(poll);
         isPolling = false;
-        console.warn('[GLPI Draft Saver] Task editor detection timed out.');
       }
     }, POLLING_INTERVAL_MS);
   }
 
   function onEditorFound() {
-    checkForAvailableDraft(); // Instead of auto-restore
+    checkForAvailableDraft();
     attachListeners();
     startPeriodicBackup();
   }
@@ -121,6 +114,19 @@
         tempDiv.innerHTML = html;
         return (tempDiv.textContent || tempDiv.innerText || '').replace(/\u00a0/g, ' ').trim();
     } catch (e) { return ''; }
+  }
+
+  /**
+   * Clipboard helper
+   */
+  async function copyToClipboard(htmlContent) {
+    try {
+        const plainText = htmlToPlainText(htmlContent);
+        await navigator.clipboard.writeText(plainText);
+        log('Content copied to clipboard.');
+    } catch (e) {
+        console.error('[GLPI Draft Saver] Clipboard copy failed:', e);
+    }
   }
 
   function saveDraft() {
@@ -141,9 +147,7 @@
           
           localStorage.setItem(STORAGE_KEY_PREFIX + ticketId, JSON.stringify(draftData));
           lastSavedContent = currentHtml;
-          
-          // Show "Saved" notification only (compact)
-          showStatusToast('Draft saved automatic');
+          showStatusToast('Borrador guardado');
         }
       }
     } catch (e) {
@@ -151,9 +155,6 @@
     }
   }
 
-  /**
-   * Check if a draft exists and the editor is empty
-   */
   function checkForAvailableDraft() {
     try {
       const rawData = localStorage.getItem(STORAGE_KEY_PREFIX + ticketId);
@@ -163,9 +164,7 @@
       const currentHtml = tinymceEditor.getContent();
       const plainText = htmlToPlainText(currentHtml);
 
-      // If editor is empty but we have a draft, prompt user
       if (plainText === '' && draftData.content) {
-        log(`Draft available from ${draftData.savedAt}. Prompting user.`);
         showRestorePrompt(draftData);
       }
     } catch (e) {
@@ -173,13 +172,9 @@
     }
   }
 
-  /**
-   * Actual restoration logic triggered by user
-   */
-  function performRestore(draftData) {
+  async function performRestore(draftData) {
     if (!tinymceEditor) return;
     
-    log('Performing user-requested restoration...');
     try {
         tinymceEditor.setContent(draftData.content);
         tinymceEditor.save();
@@ -190,11 +185,12 @@
           targetTextarea.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
-        showStatusToast('Draft restored successfully');
-        log('Restoration complete.');
+        // As requested: Restoration also copies to clipboard
+        await copyToClipboard(draftData.content);
+        
+        showStatusToast('Restaurado y copiado');
     } catch (e) {
-        log('Restoration failed in performRestore:', e);
-        alert('Error al restaurar el borrador. Revisa la consola.');
+        log('Restoration failed:', e);
     }
   }
 
@@ -219,9 +215,6 @@
     }
   }
 
-  /**
-   * Shows a prompt with a button to restore the draft
-   */
   function showRestorePrompt(draftData) {
     if (!toastElement) return;
     if (toastTimer) clearTimeout(toastTimer);
@@ -230,9 +223,10 @@
     
     toastElement.innerHTML = `
       <div><strong>Borrador encontrado</strong></div>
-      <div style="font-size: 11px; opacity: 0.8;">Guardado el: ${savedDate}</div>
+      <div style="font-size: 11px; opacity: 0.8;">Guardado: ${savedDate}</div>
       <div class="toast-actions">
         <button id="glpi-btn-restore">Restaurar ahora</button>
+        <button id="glpi-btn-copy" class="secondary">Copiar</button>
         <button id="glpi-btn-dismiss" class="secondary">Ignorar</button>
       </div>
     `;
@@ -240,25 +234,23 @@
     toastElement.style.setProperty('display', 'flex', 'important');
     toastElement.classList.add('show');
 
-    // Attach button listeners
     document.getElementById('glpi-btn-restore').onclick = () => {
         performRestore(draftData);
         hideToast();
     };
 
+    document.getElementById('glpi-btn-copy').onclick = async () => {
+        await copyToClipboard(draftData.content);
+        showStatusToast('Copiado al portapapeles');
+    };
+
     document.getElementById('glpi-btn-dismiss').onclick = () => {
-        log('User dismissed draft restoration.');
         hideToast();
     };
   }
 
-  /**
-   * Shows a simple status message (Saved, etc.)
-   */
   function showStatusToast(message) {
     if (!toastElement) return;
-    
-    // Don't interrupt a restore prompt if it's active
     if (toastElement.querySelector('#glpi-btn-restore')) return;
 
     if (toastTimer) clearTimeout(toastTimer);
@@ -314,7 +306,6 @@
     return (id && /^\d+$/.test(id)) ? id : null;
   }
 
-  // Start execution
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
