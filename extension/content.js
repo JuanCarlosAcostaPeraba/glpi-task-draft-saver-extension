@@ -1,6 +1,6 @@
 /**
- * GLPI Task Draft Saver - content.js (Final Refined Edition)
- * Automatically saves drafts written in GLPI ticket tasks.
+ * GLPI Task Draft Saver - content.js (Final TinyMCE Robust Edition)
+ * Automatically saves drafts written specifically in GLPI ticket tasks.
  */
 
 (function () {
@@ -11,7 +11,7 @@
   window.__GLPI_DRAFT_SAVER_ACTIVE__ = true;
 
   // --- CONFIGURATION & CONSTANTS ---
-  const DEBUG = true;
+  const DEBUG = true; // Still true for debugging based on user request
   const AUTOSAVE_INTERVAL_MS = 5000;
   const DEBOUNCE_DELAY_MS = 1000;
   const MIN_CONTENT_LENGTH = 10;
@@ -23,12 +23,10 @@
   const SUBMIT_FLAG_PREFIX = 'glpi_submit_attempt_';
   const TARGET_PATHNAME = '/front/ticket.form.php';
 
-  // Keywords for prioritizing task textareas
-  const TASK_KEYWORDS = ['content', 'task', 'tasks', 'comment', 'plan', 'actiontime'];
-
   // --- STATE ---
   let ticketId = null;
-  let editorElement = null;
+  let targetTextarea = null;
+  let tinymceEditor = null;
   let debounceTimer = null;
   let autosaveInterval = null;
   let toastElement = null;
@@ -50,9 +48,12 @@
    * Main entry point
    */
   function init() {
-    if (window.location.pathname !== TARGET_PATHNAME) return;
+    // Basic verification of pathname
+    if (window.location.pathname !== TARGET_PATHNAME) {
+        log('Not on a ticket form page. Path:', window.location.pathname);
+        return;
+    }
 
-    // 4. Validate ticketId: only accept numeric IDs
     ticketId = getValidatedTicketId();
     if (!ticketId) {
       log('No valid numeric ticket ID found in URL.');
@@ -60,155 +61,146 @@
     }
 
     setupToastIndicator();
-    startEditorDetection();
+    startTinyMCEDetectionPolling();
   }
 
-  // --- EDITOR DETECTION ---
+  // --- EDITOR DETECTION (TinyMCE) ---
 
   /**
-   * Singleton polling mechanism
+   * Robust polling to find the specific editor for "Task" (Tarea)
    */
-  function startEditorDetection() {
+  function startTinyMCEDetectionPolling() {
     if (isPolling) return;
     isPolling = true;
     pollingStartTime = Date.now();
 
-    log('Starting editor detection polling...');
+    log('Starting TinyMCE detection polling (Robust Edition)...');
 
     const poll = setInterval(() => {
-      editorElement = findBestEditor();
+      // Find all textareas named "content", as GLPI can have several (Solution vs Task)
+      const textareas = Array.from(document.querySelectorAll('textarea[name="content"][id]'));
+      
+      if (textareas.length > 0) {
+        // Find the one that specifically starts with "content_" (usually the Task editor)
+        // and avoid those that start with "solution_content_"
+        targetTextarea = textareas.find(el => {
+            const id = el.id.toLowerCase();
+            return id.startsWith('content_') && !id.startsWith('solution_content_');
+        });
 
-      if (editorElement) {
+        // Fallback: pick the first one if the above specific filter fails
+        if (!targetTextarea) {
+            targetTextarea = textareas[0];
+            log('Specific task textarea not identified, falling back to first match:', targetTextarea.id);
+        } else {
+            log('Target Task textarea identified:', targetTextarea.id);
+        }
+
+        const tinymce = window.tinymce;
+        if (tinymce && typeof tinymce.get === 'function') {
+          const editor = tinymce.get(targetTextarea.id);
+
+          if (editor && 
+              typeof editor.getContent === 'function' && 
+              typeof editor.setContent === 'function' && 
+              typeof editor.save === 'function') {
+            
+            tinymceEditor = editor;
+            clearInterval(poll);
+            isPolling = false;
+            log('TinyMCE editor instance for Task ready.');
+            onEditorFound();
+          }
+        }
+      }
+
+      if (isPolling && (Date.now() - pollingStartTime > POLLING_MAX_TIME_MS)) {
         clearInterval(poll);
         isPolling = false;
-        log('Best editor found and selected.');
-        onEditorFound();
-      } else if (Date.now() - pollingStartTime > POLLING_MAX_TIME_MS) {
-        clearInterval(poll);
-        isPolling = false;
-        console.warn('[GLPI Draft Saver] Could not find a valid task textarea after 15 seconds.');
+        console.warn('[GLPI Draft Saver] Task editor not detected or not ready after 15s.');
       }
     }, POLLING_INTERVAL_MS);
   }
 
-  /**
-   * 1. Prioritized Textarea Detection
-   * Finds and scores textareas to find the most likely task editor.
-   */
-  function findBestEditor() {
-    const textareas = Array.from(document.querySelectorAll('textarea'));
-    let bestEditor = null;
-    let highestScore = -1;
-
-    for (const el of textareas) {
-      // Basic requirements: visible, enabled, inside a form
-      const isVisible = el.offsetWidth > 0 && el.offsetHeight > 0;
-      const isNotHidden = !el.hidden && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden';
-      const isEnabled = !el.disabled && !el.readOnly;
-      const insideForm = el.closest('form');
-
-      if (isVisible && isNotHidden && isEnabled && insideForm) {
-        let score = calculateEditorScore(el);
-        if (score > highestScore) {
-          highestScore = score;
-          bestEditor = el;
-        }
-      }
-    }
-    return bestEditor;
-  }
-
-  /**
-   * Calculates a priority score for a textarea based on keywords
-   */
-  function calculateEditorScore(el) {
-    let score = 0;
-    const attributesToMatch = [
-      el.id,
-      el.name,
-      el.className,
-      el.getAttribute('aria-label'),
-      el.getAttribute('placeholder')
-    ];
-
-    const searchableString = attributesToMatch.filter(Boolean).join(' ').toLowerCase();
-
-    TASK_KEYWORDS.forEach(keyword => {
-      if (searchableString.includes(keyword.toLowerCase())) {
-        score += 10;
-      }
-    });
-
-    return score;
-  }
-
   function onEditorFound() {
     restoreDraft();
-    attachEditorListeners();
+    attachTinyMCEListeners();
     startPeriodicBackup();
     handlePostSaveCleanup();
   }
 
   // --- STORAGE & LOGIC ---
 
-  /**
-   * 3. Improved saveDraft: deletes draft if content is too small
-   */
+  function htmlToPlainText(html) {
+    if (!html) return '';
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    return tempDiv.textContent || tempDiv.innerText || '';
+  }
+
   function saveDraft() {
-    if (!ticketId || !editorElement) return;
+    if (!ticketId || !tinymceEditor) return;
 
-    const currentContent = editorElement.value;
-    const trimmedContent = currentContent.trim();
+    try {
+      tinymceEditor.save();
+    } catch (e) {
+      log('Error syncing TinyMCE to textarea:', e);
+    }
 
-    if (trimmedContent.length >= MIN_CONTENT_LENGTH) {
-      if (currentContent !== lastSavedContent) {
+    const currentHtml = tinymceEditor.getContent();
+    const plainText = htmlToPlainText(currentHtml);
+
+    if (plainText.trim().length >= MIN_CONTENT_LENGTH) {
+      if (currentHtml !== lastSavedContent) {
         const draftData = {
           ticketId: ticketId,
-          content: currentContent,
+          content: currentHtml,
           savedAt: new Date().toISOString()
         };
 
         try {
           localStorage.setItem(STORAGE_KEY_PREFIX + ticketId, JSON.stringify(draftData));
-          lastSavedContent = currentContent;
+          lastSavedContent = currentHtml;
           log('Draft saved.');
           showToastIndicator();
         } catch (e) {
-          console.error('[GLPI Draft Saver] localStorage error:', e);
+          console.error('[GLPI Draft Saver] localStorage write sync failed:', e);
         }
       }
-    } else {
-      // 3. Remove draft if content length is below threshold
-      try {
-        if (localStorage.getItem(STORAGE_KEY_PREFIX + ticketId)) {
-          localStorage.removeItem(STORAGE_KEY_PREFIX + ticketId);
-          lastSavedContent = '';
-          log('Draft removed (content too small).');
+    } else if (localStorage.getItem(STORAGE_KEY_PREFIX + ticketId)) {
+        // Only remove if it was actually too small after being large enough before
+        // This handles cases where user cleared the whole thing
+        try {
+            localStorage.removeItem(STORAGE_KEY_PREFIX + ticketId);
+            lastSavedContent = currentHtml; 
+            log('Draft removed (content below threshold).');
+        } catch (e) {
+            log('Error clearing small draft.', e);
         }
-      } catch (e) {
-        log('Error removing small draft.', e);
-      }
     }
   }
 
-  /**
-   * 2. Restore draft with event dispatching
-   */
   function restoreDraft() {
     try {
       const rawData = localStorage.getItem(STORAGE_KEY_PREFIX + ticketId);
       if (!rawData) return;
 
       const draftData = JSON.parse(rawData);
-      if (editorElement.value.trim() === '' && draftData.content) {
-        editorElement.value = draftData.content;
+      const currentHtml = tinymceEditor.getContent();
+      const plainText = htmlToPlainText(currentHtml);
+
+      // Restore if current content is practically empty
+      if (plainText.trim() === '' && draftData.content) {
+        tinymceEditor.setContent(draftData.content);
+        tinymceEditor.save();
         lastSavedContent = draftData.content;
 
-        // 2. Dispatch both input and change events
-        editorElement.dispatchEvent(new Event('input', { bubbles: true }));
-        editorElement.dispatchEvent(new Event('change', { bubbles: true }));
+        if (targetTextarea) {
+          targetTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+          targetTextarea.dispatchEvent(new Event('change', { bubbles: true }));
+        }
 
-        log('Draft restored with event notification.');
+        log('TinyMCE Task draft restored.');
       }
     } catch (e) {
       log('Failed to restore draft.', e);
@@ -220,32 +212,40 @@
       const submitFlag = localStorage.getItem(SUBMIT_FLAG_PREFIX + ticketId);
       if (submitFlag === 'true') {
         localStorage.removeItem(SUBMIT_FLAG_PREFIX + ticketId);
-        log('Submit flag cleared. Draft stays for safety.');
+        log('Acknowledge submit. Keeping draft for safety.');
       }
     } catch (e) {
       log('Cleanup error.', e);
     }
   }
 
-  // --- DOM INTERACTION ---
+  // --- INTERACTION ---
 
-  function attachEditorListeners() {
-    ['input', 'change', 'blur'].forEach(eventType => {
-      editorElement.addEventListener(eventType, () => {
+  function attachTinyMCEListeners() {
+    if (!tinymceEditor) return;
+
+    const events = ['input', 'change', 'keyup', 'undo', 'redo'];
+
+    events.forEach(eventType => {
+      tinymceEditor.on(eventType, () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(saveDraft, DEBOUNCE_DELAY_MS);
       });
     });
 
-    const parentForm = editorElement.closest('form');
-    if (parentForm) {
-      parentForm.addEventListener('submit', () => {
-        try {
-          localStorage.setItem(SUBMIT_FLAG_PREFIX + ticketId, 'true');
-        } catch (e) {
-          log('Error setting submit flag.', e);
-        }
-      });
+    if (targetTextarea) {
+      // Find the form that owns this textarea
+      const parentForm = targetTextarea.closest('form');
+      if (parentForm) {
+        parentForm.addEventListener('submit', () => {
+          try {
+            localStorage.setItem(SUBMIT_FLAG_PREFIX + ticketId, 'true');
+            log('Form submit detected.');
+          } catch (e) {
+            log('Error setting submit flag.', e);
+          }
+        });
+      }
     }
   }
 
@@ -254,21 +254,14 @@
     autosaveInterval = setInterval(saveDraft, AUTOSAVE_INTERVAL_MS);
   }
 
-  /**
-   * 4. Numeric ticketId validation
-   */
   function getValidatedTicketId() {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
-    // Numeric check: non-empty and consists only of digits
     return (id && /^\d+$/.test(id)) ? id : null;
   }
 
   // --- UI INDICATOR ---
 
-  /**
-   * 5. Safe setupToastIndicator: ensures body exists
-   */
   function setupToastIndicator() {
     if (document.getElementById('glpi-draft-saver-toast')) return;
 
@@ -277,11 +270,9 @@
     toastElement.className = 'glpi-draft-saver-toast';
     toastElement.innerText = 'Draft saved';
 
-    // 5. Ensure document.body exists before append
     if (document.body) {
       document.body.appendChild(toastElement);
     } else {
-      // Fallback: wait for load
       window.addEventListener('load', () => {
         if (!document.getElementById('glpi-draft-saver-toast')) {
           document.body.appendChild(toastElement);
@@ -301,7 +292,7 @@
     }, TOAST_DURATION_MS);
   }
 
-  // Start execution logic
+  // Start execution when the document finishes loading
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

@@ -4,12 +4,14 @@
   "version": "1.0.0",
   "description": "Automatically saves drafts written in GLPI ticket tasks to prevent data loss.",
   "host_permissions": [
-    "https://gise.huc.es/front/ticket.form.php*"
+    "https://*.huc.es/front/ticket.form.php*",
+    "https://10.137.96.244/front/ticket.form.php*"
   ],
   "content_scripts": [
     {
       "matches": [
-        "https://gise.huc.es/front/ticket.form.php*"
+        "https://*.huc.es/front/ticket.form.php*",
+        "https://10.137.96.244/front/ticket.form.php*"
       ],
       "js": [
         "content.js"
@@ -17,7 +19,8 @@
       "css": [
         "style.css"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "world": "MAIN"
     }
   ]
 }
