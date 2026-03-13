@@ -1,0 +1,10 @@
+# Directories
+docs/screenshots/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Browser extension related
+*.crx
+*.pem
