@@ -1,0 +1,21 @@
+/* Draft Saver Toast Styles */
+.glpi-draft-saver-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: rgba(51, 51, 51, 0.9);
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  z-index: 99999;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.glpi-draft-saver-toast.show {
+  opacity: 1;
+}
