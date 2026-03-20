@@ -66,7 +66,7 @@
     // Check for draft IMMEDIATELY on load
     checkForAvailableDraft();
 
-    // Still start background polling for general editor detection (autosave)
+    // Start polling for general editor detection (autosave)
     startTinyMCEDetectionPolling();
   }
 
@@ -135,7 +135,6 @@
   async function copyToClipboard(htmlContent) {
     try {
         const plainText = htmlToPlainText(htmlContent);
-        // Using a non-blocking approach to clipboard
         await navigator.clipboard.writeText(plainText);
         log('Copied to clipboard.');
         return true;
@@ -171,10 +170,6 @@
     }
   }
 
-  /**
-   * Check if a draft exists. 
-   * If editor is already visible, only prompt if it's empty.
-   */
   function checkForAvailableDraft() {
     try {
       const rawData = localStorage.getItem(STORAGE_KEY_PREFIX + ticketId);
@@ -182,13 +177,10 @@
 
       const draftData = JSON.parse(rawData);
       
-      // If editor exists, check if it's empty
+      // If editor exists and has content, skip prompt
       if (tinymceEditor) {
           const plainText = htmlToPlainText(tinymceEditor.getContent());
-          if (plainText !== '') {
-              log('Draft exists but editor is already populated. Skipping prompt.');
-              return;
-          }
+          if (plainText !== '') return;
       }
 
       log(`Found draft from ${draftData.savedAt}. Showing prompt.`);
@@ -196,71 +188,51 @@
     } catch (e) { log('Draft check error:', e); }
   }
 
-  async function performRestore(draftData) {
-    if (!tinymceEditor) {
-        log('Cannot restore: Editor not found.');
-        return;
-    }
+  /**
+   * Logic to handle the 'Restore' button click.
+   * Ensures the task form is visible by clicking the button, then restores content.
+   */
+  function handleRestoreAction(draftData) {
+    const taskBtn = document.querySelector(TASK_BUTTON_SELECTOR);
     
-    log('Performing restoration logic...');
+    // Always attempt to click to show form
+    if (taskBtn) {
+        log('Clicking Task button for visibility.');
+        taskBtn.click();
+    }
+
+    if (tinymceEditor) {
+        performRestore(draftData);
+    } else {
+        log('Waiting for editor initialization...');
+        startTinyMCEDetectionPolling(() => {
+            performRestore(draftData);
+        });
+    }
+  }
+
+  async function performRestore(draftData) {
+    if (!tinymceEditor) return;
+    
+    log('Performing restoration...');
     try {
-        // 1. Set Content first
         tinymceEditor.setContent(draftData.content);
-        
-        // 2. Sync to hidden textarea
         tinymceEditor.save();
         lastSavedContent = draftData.content;
 
-        // 3. Dispatch events for GLPI listeners
         if (targetTextarea) {
           targetTextarea.dispatchEvent(new Event('input', { bubbles: true }));
           targetTextarea.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
-        // 4. Show success first
         showStatusToast('Borrador restaurado');
 
-        // 5. Attempt clipboard copy last (non-blocking)
+        // Non-blocking clipboard copy
         copyToClipboard(draftData.content).then(success => {
             if (success) showStatusToast('Borrador restaurado y copiado');
         });
 
-        log('Restoration UI sequence complete.');
-    } catch (e) { 
-        log('Restoration error:', e);
-        alert('Error al restaurar el borrador. Revisa la consola.');
-    }
-  }
-
-  /**
-   * Logic to handle the 'Restore' button click.
-   * If editor is missing, clicks the 'Tarea' button first.
-   */
-  function handleRestoreAction(draftData) {
-    if (tinymceEditor) {
-        log('Editor found. Restoring directly.');
-        performRestore(draftData);
-    } else {
-        log('Editor not present. Attempting to open task form...');
-        const taskBtn = document.querySelector(TASK_BUTTON_SELECTOR);
-        if (taskBtn) {
-            taskBtn.click();
-            // Wait for TinyMCE to appear after click
-            startTinyMCEDetectionPolling(() => {
-                performRestore(draftData);
-            });
-        } else {
-            console.warn('[GLPI Draft Saver] Could not find Task button.');
-            alert('No se encontró el botón de tarea. Por favor, abre la tarea manualmente.');
-            // Still copy to clipboard as backup if possible
-            copyToClipboard(draftData.content);
-        }
-    }
-  }
-
-  async function performRestoreMain(draftData) {
-      // Internal helper to avoid name collision with previous versions if any
-      return performRestore(draftData);
+    } catch (e) { log('Restoration error:', e); }
   }
 
   // --- UI INDICATOR ---
@@ -321,7 +293,7 @@
   }
 
   function showStatusToast(message) {
-    if (!toastElement) return;
+    if (!toastElement || !toastElement.parentNode) return;
     if (toastElement.querySelector('#glpi-btn-restore')) return;
 
     if (toastTimer) clearTimeout(toastTimer);
@@ -349,7 +321,7 @@
 
     const events = ['input', 'change', 'keyup', 'undo', 'redo'];
     events.forEach(eventType => {
-      tinymceEditor.off(eventType); // Avoid multiples
+      tinymceEditor.off(eventType);
       tinymceEditor.on(eventType, () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(saveDraft, DEBOUNCE_DELAY_MS);
