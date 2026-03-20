@@ -332,7 +332,12 @@
       const parentForm = targetTextarea.closest('form');
       if (parentForm) {
         parentForm.addEventListener('submit', () => {
-          try { localStorage.setItem(SUBMIT_FLAG_PREFIX + ticketId, 'true'); } catch (e) { }
+          log('Form submitted. Cleaning up draft.');
+          try {
+            localStorage.removeItem(STORAGE_KEY_PREFIX + ticketId);
+          } catch (e) {
+            log('Error cleaning up draft on submit:', e);
+          }
         });
       }
     }
