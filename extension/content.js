@@ -1,6 +1,7 @@
 /**
- * GLPI Task Draft Saver - content.js (Clipboard & Restore Edition)
+ * GLPI Task Draft Saver - content.js (Smart UX Edition)
  * Automatically saves drafts and provides UI to restore or copy them to clipboard.
+ * Now supports automated task form opening on restoration.
  */
 
 (function () {
@@ -25,6 +26,10 @@
   const STORAGE_KEY_PREFIX = 'glpi_draft_ticket_';
   const SUBMIT_FLAG_PREFIX = 'glpi_submit_attempt_';
   const TARGET_PATHNAME = '/front/ticket.form.php';
+  
+  // Selectors
+  const TASK_BUTTON_SELECTOR = 'button.action-task, button[data-bs-target="#new-TicketTask-block"]';
+  const TEXTAREA_SELECTOR = 'textarea[name="content"][id]';
 
   // --- STATE ---
   let ticketId = null;
@@ -39,7 +44,7 @@
   let lastSavedContent = '';
 
   /**
-   * Internal logger for debug mode
+   * Internal logger
    */
   function log(...args) {
     if (DEBUG) {
@@ -57,18 +62,25 @@
     if (!ticketId) return;
 
     setupToastIndicator();
+    
+    // Check for draft IMMEDIATELY on load
+    checkForAvailableDraft();
+
+    // Still start background polling for general editor detection (autosave)
     startTinyMCEDetectionPolling();
   }
 
   // --- EDITOR DETECTION ---
 
-  function startTinyMCEDetectionPolling() {
-    if (isPolling) return;
+  function startTinyMCEDetectionPolling(callbackOnFound = null) {
+    if (isPolling && !callbackOnFound) return;
     isPolling = true;
     pollingStartTime = Date.now();
 
+    log('Polling for TinyMCE editor...');
+
     const poll = setInterval(() => {
-      const textareas = Array.from(document.querySelectorAll('textarea[name="content"][id]'));
+      const textareas = Array.from(document.querySelectorAll(TEXTAREA_SELECTOR));
       
       if (textareas.length > 0) {
         const taskTextarea = textareas.find(el => {
@@ -81,12 +93,16 @@
           if (tinymce && typeof tinymce.get === 'function') {
             const editor = tinymce.get(taskTextarea.id);
 
+            // Check readiness (must have standard methods)
             if (editor && typeof editor.getContent === 'function' && typeof editor.save === 'function') {
               targetTextarea = taskTextarea;
               tinymceEditor = editor;
               clearInterval(poll);
               isPolling = false;
+              log(`Success: Found Task editor [${taskTextarea.id}].`);
+              
               onEditorFound();
+              if (callbackOnFound) callbackOnFound();
             }
           }
         }
@@ -95,12 +111,12 @@
       if (isPolling && (Date.now() - pollingStartTime > POLLING_MAX_TIME_MS)) {
         clearInterval(poll);
         isPolling = false;
+        log('Polling timed out.');
       }
     }, POLLING_INTERVAL_MS);
   }
 
   function onEditorFound() {
-    checkForAvailableDraft();
     attachListeners();
     startPeriodicBackup();
   }
@@ -116,16 +132,16 @@
     } catch (e) { return ''; }
   }
 
-  /**
-   * Clipboard helper
-   */
   async function copyToClipboard(htmlContent) {
     try {
         const plainText = htmlToPlainText(htmlContent);
+        // Using a non-blocking approach to clipboard
         await navigator.clipboard.writeText(plainText);
-        log('Content copied to clipboard.');
-    } catch (e) {
-        console.error('[GLPI Draft Saver] Clipboard copy failed:', e);
+        log('Copied to clipboard.');
+        return true;
+    } catch (e) { 
+        log('Clipboard copy failed (non-critical):', e); 
+        return false;
     }
   }
 
@@ -155,43 +171,96 @@
     }
   }
 
+  /**
+   * Check if a draft exists. 
+   * If editor is already visible, only prompt if it's empty.
+   */
   function checkForAvailableDraft() {
     try {
       const rawData = localStorage.getItem(STORAGE_KEY_PREFIX + ticketId);
       if (!rawData) return;
 
       const draftData = JSON.parse(rawData);
-      const currentHtml = tinymceEditor.getContent();
-      const plainText = htmlToPlainText(currentHtml);
-
-      if (plainText === '' && draftData.content) {
-        showRestorePrompt(draftData);
+      
+      // If editor exists, check if it's empty
+      if (tinymceEditor) {
+          const plainText = htmlToPlainText(tinymceEditor.getContent());
+          if (plainText !== '') {
+              log('Draft exists but editor is already populated. Skipping prompt.');
+              return;
+          }
       }
-    } catch (e) {
-      log('Check for available draft failed:', e);
-    }
+
+      log(`Found draft from ${draftData.savedAt}. Showing prompt.`);
+      showRestorePrompt(draftData);
+    } catch (e) { log('Draft check error:', e); }
   }
 
   async function performRestore(draftData) {
-    if (!tinymceEditor) return;
+    if (!tinymceEditor) {
+        log('Cannot restore: Editor not found.');
+        return;
+    }
     
+    log('Performing restoration logic...');
     try {
+        // 1. Set Content first
         tinymceEditor.setContent(draftData.content);
+        
+        // 2. Sync to hidden textarea
         tinymceEditor.save();
         lastSavedContent = draftData.content;
 
+        // 3. Dispatch events for GLPI listeners
         if (targetTextarea) {
           targetTextarea.dispatchEvent(new Event('input', { bubbles: true }));
           targetTextarea.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
-        // As requested: Restoration also copies to clipboard
-        await copyToClipboard(draftData.content);
-        
-        showStatusToast('Restaurado y copiado');
-    } catch (e) {
-        log('Restoration failed:', e);
+        // 4. Show success first
+        showStatusToast('Borrador restaurado');
+
+        // 5. Attempt clipboard copy last (non-blocking)
+        copyToClipboard(draftData.content).then(success => {
+            if (success) showStatusToast('Borrador restaurado y copiado');
+        });
+
+        log('Restoration UI sequence complete.');
+    } catch (e) { 
+        log('Restoration error:', e);
+        alert('Error al restaurar el borrador. Revisa la consola.');
     }
+  }
+
+  /**
+   * Logic to handle the 'Restore' button click.
+   * If editor is missing, clicks the 'Tarea' button first.
+   */
+  function handleRestoreAction(draftData) {
+    if (tinymceEditor) {
+        log('Editor found. Restoring directly.');
+        performRestore(draftData);
+    } else {
+        log('Editor not present. Attempting to open task form...');
+        const taskBtn = document.querySelector(TASK_BUTTON_SELECTOR);
+        if (taskBtn) {
+            taskBtn.click();
+            // Wait for TinyMCE to appear after click
+            startTinyMCEDetectionPolling(() => {
+                performRestore(draftData);
+            });
+        } else {
+            console.warn('[GLPI Draft Saver] Could not find Task button.');
+            alert('No se encontró el botón de tarea. Por favor, abre la tarea manualmente.');
+            // Still copy to clipboard as backup if possible
+            copyToClipboard(draftData.content);
+        }
+    }
+  }
+
+  async function performRestoreMain(draftData) {
+      // Internal helper to avoid name collision with previous versions if any
+      return performRestore(draftData);
   }
 
   // --- UI INDICATOR ---
@@ -235,7 +304,7 @@
     toastElement.classList.add('show');
 
     document.getElementById('glpi-btn-restore').onclick = () => {
-        performRestore(draftData);
+        handleRestoreAction(draftData);
         hideToast();
     };
 
@@ -245,12 +314,8 @@
     };
 
     document.getElementById('glpi-btn-dismiss').onclick = () => {
-        log('User dismissed and deleted draft restoration.');
-        try {
-            localStorage.removeItem(STORAGE_KEY_PREFIX + ticketId);
-        } catch (e) {
-            log('Error deleting draft on dismissal:', e);
-        }
+        log('User dismissed and deleted draft.');
+        try { localStorage.removeItem(STORAGE_KEY_PREFIX + ticketId); } catch (e) {}
         hideToast();
     };
   }
@@ -282,7 +347,9 @@
   function attachListeners() {
     if (!tinymceEditor) return;
 
-    ['input', 'change', 'keyup', 'undo', 'redo'].forEach(eventType => {
+    const events = ['input', 'change', 'keyup', 'undo', 'redo'];
+    events.forEach(eventType => {
+      tinymceEditor.off(eventType); // Avoid multiples
       tinymceEditor.on(eventType, () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(saveDraft, DEBOUNCE_DELAY_MS);
@@ -293,9 +360,7 @@
       const parentForm = targetTextarea.closest('form');
       if (parentForm) {
         parentForm.addEventListener('submit', () => {
-          try {
-            localStorage.setItem(SUBMIT_FLAG_PREFIX + ticketId, 'true');
-          } catch (e) { }
+          try { localStorage.setItem(SUBMIT_FLAG_PREFIX + ticketId, 'true'); } catch (e) { }
         });
       }
     }
