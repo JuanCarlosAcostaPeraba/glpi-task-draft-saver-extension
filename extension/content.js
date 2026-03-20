@@ -245,6 +245,12 @@
     };
 
     document.getElementById('glpi-btn-dismiss').onclick = () => {
+        log('User dismissed and deleted draft restoration.');
+        try {
+            localStorage.removeItem(STORAGE_KEY_PREFIX + ticketId);
+        } catch (e) {
+            log('Error deleting draft on dismissal:', e);
+        }
         hideToast();
     };
   }
