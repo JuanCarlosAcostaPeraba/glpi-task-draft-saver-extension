@@ -11,15 +11,28 @@ A browser extension that automatically saves drafts written in GLPI ticket tasks
 - **Visual Feedback**: Shows a quiet "Draft saved" toast notification in the bottom-right corner.
 - **Secure & Private**: All data is stored locally in the browser's `localStorage`. No data is sent elsewhere.
 
-## Installation Instructions
+## Instalación para Técnicos
 
-1.  **Download/Clone** this repository to your computer.
-2.  Open **Google Chrome** (or Microsoft Edge).
-3.  Go to `chrome://extensions/` (or `edge://extensions/`).
-4.  Enable **Developer mode** (toggle in the top-right corner).
-5.  Click on **Load unpacked**.
-6.  Select the `extension` folder within this project directory.
-7.  The extension is now active on `https://gise.huc.es/front/ticket.form.php*`.
+### Google Chrome / Microsoft Edge / Brave
+La forma más sencilla de instalar la extensión es usar el archivo `.zip`:
+
+1. Descarga el archivo `glpi-task-draft-saver.zip`.
+2. Extrae el contenido en una carpeta en tu ordenador (ej. `C:\Extensiones\GLPI-Draft-Saver`).
+3. Abre tu navegador y ve a la página de extensiones:
+   - Chrome/Brave: `chrome://extensions/`
+   - Edge: `edge://extensions/`
+4. Activa el **Modo de desarrollador** (arriba a la derecha en Chrome, abajo a la izquierda en Edge).
+5. Haz clic en el botón **Cargar descomprimida** (o "Cargar elemento sin empaquetar").
+6. Selecciona la carpeta donde extrajiste los archivos.
+
+### Mozilla Firefox
+Firefox requiere que las extensiones estén firmadas por Mozilla para ser instaladas de forma permanente. Si el departamento de IT ha proporcionado el archivo `.xpi` (versión firmada No Listada en AMO):
+1. Asegúrate de tener el archivo descargado (ej. `glpi-task-draft-saver.xpi`).
+2. Abre Firefox y entra en `about:addons`.
+3. Arrastra el archivo `.xpi` hacia la ventana del navegador.
+4. Confirma la instalación cuando Firefox te pregunte.
+
+*(Si solo tienes el código fuente o el `.zip` y quieres probarla temporalmente, ve a `about:debugging` > Este Firefox > Cargar complemento temporal y selecciona el archivo `manifest.json`).*
 
 ## Technical Details
 
