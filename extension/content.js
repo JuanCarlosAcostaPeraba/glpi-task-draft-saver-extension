@@ -306,8 +306,7 @@
         if (attempts >= maxAttempts) {
             clearInterval(waitInterval);
             log(`Could not restore automatically after ${attempts} attempts.`);
-            // Show persistent error as requested (10 seconds)
-            showStatusToast(`Error de GISE, Texto en el portapapeles`, 10000);
+            showStatusToast(`Error de GISE, mensaje copiado al portapapeles`, 15000, 'warning-toast');
         }
     }, 500);
   }
@@ -321,6 +320,15 @@
     log(`Performing restoration for ${draftData.type}...`);
     try {
         const doRestore = () => {
+            // Safety checks for TinyMCE internal state
+            if (data.editor.removed) return;
+            if (typeof data.editor.setContent !== 'function') return;
+
+            // Ensure editor is focused/active to avoid some internal plugin errors
+            if (typeof data.editor.focus === 'function') {
+                data.editor.focus();
+            }
+
             data.editor.setContent(draftData.content);
             data.editor.save();
             data.lastSavedContent = draftData.content;
@@ -331,20 +339,32 @@
             }
         };
 
-        doRestore();
-
-        // Verification and potential retry
+        // Delay execution by 300ms to allow TinyMCE internal plugins (like resize) 
+        // to finish initializing after the block visibility changed.
         setTimeout(() => {
-            const currentContent = data.editor.getContent();
-            if (currentContent.length < 5 && draftData.content.length > 10) {
-                log('Restoration seemed to fail (content empty). Retrying...');
+            try {
                 doRestore();
+                
+                // Verification and potential retry
+                setTimeout(() => {
+                    const currentContent = data.editor.getContent();
+                    if (currentContent.length < 5 && draftData.content.length > 10) {
+                        log('Restoration seemed to fail (content empty). Retrying...');
+                        doRestore();
+                    }
+                    
+                    showStatusToast(`Borrador de ${DRAFT_TYPES[draftData.type].label} restaurado`);
+                }, 150);
+            } catch (innerError) {
+                log('Inner restoration error:', innerError);
+                showStatusToast(`Error de GISE, mensaje copiado al portapapeles`, 15000, 'warning-toast');
             }
-            
-            showStatusToast(`Borrador de ${DRAFT_TYPES[draftData.type].label} restaurado`);
-        }, 100);
+        }, 300);
 
-    } catch (e) { log('Restoration error:', e); }
+    } catch (e) { 
+        log('Restoration error:', e); 
+        showStatusToast(`Error de GISE, mensaje copiado al portapapeles`, 15000, 'warning-toast');
+    }
   }
 
 
@@ -410,11 +430,11 @@
     };
   }
 
-  function showStatusToast(message, duration = TOAST_SUCCESS_MS) {
+  function showStatusToast(message, duration = TOAST_SUCCESS_MS, extraClass = 'status-toast') {
     if (!toastContainer) setupToastContainer();
 
     const toast = document.createElement('div');
-    toast.className = 'glpi-draft-saver-toast status-toast';
+    toast.className = `glpi-draft-saver-toast ${extraClass}`;
     toast.innerHTML = `<div>${message}</div>`;
     toastContainer.appendChild(toast);
 

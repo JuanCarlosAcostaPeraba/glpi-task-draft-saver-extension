@@ -71,6 +71,12 @@ html[data-glpi-draft-saver-theme="dark"] {
   min-width: auto;
 }
 
+.glpi-draft-saver-toast.warning-toast {
+  background-color: rgba(220, 90, 0, 0.95); /* Warning orange */
+  padding: 8px 15px;
+  min-width: auto;
+}
+
 /* Specific button styles for the toast */
 .glpi-draft-saver-toast .toast-actions {
   display: flex;
