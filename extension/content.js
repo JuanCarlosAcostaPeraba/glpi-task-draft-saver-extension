@@ -97,14 +97,22 @@
 
   // --- EDITOR DETECTION ---
 
-  function startTinyMCEDetectionPolling() {
-    if (isPolling) return;
+  function startTinyMCEDetectionPolling(force = false) {
+    if (isPolling && !force) return;
+    
+    // If forcing and already polling, clear previous first
+    if (force && isPolling && window.__draft_saver_poll_interval) {
+        clearInterval(window.__draft_saver_poll_interval);
+    }
+
     isPolling = true;
     const pollingStartTime = Date.now();
 
-    log('Polling for TinyMCE editors...');
+    log('Polling for TinyMCE editors' + (force ? ' (Forced restart)' : '') + '...');
 
     const poll = setInterval(() => {
+      window.__draft_saver_poll_interval = poll;
+
       let foundAnyNew = false;
 
       for (const [type, config] of Object.entries(DRAFT_TYPES)) {
@@ -247,32 +255,52 @@
     const config = DRAFT_TYPES[draftData.type];
     const btn = document.querySelector(config.buttonSelector);
     
-    // Always attempt to click to show form
+    // 1. Copy to clipboard immediately as a safety measure
+    copyToClipboard(draftData.content).then(success => {
+        if (success) {
+            log('Backup copy to clipboard successful.');
+        }
+    });
+
+    // 2. Try to show form
     if (btn) {
         log(`Clicking ${draftData.type} button for visibility.`);
         btn.click();
     }
 
-    const editorData = activeEditors.get(draftData.type);
-    if (editorData) {
-        performRestore(draftData);
-    } else {
-        log(`Waiting for ${draftData.type} editor initialization...`);
-        // We might need to restart polling if it stopped
-        startTinyMCEDetectionPolling();
+    // 3. Start polling
+    startTinyMCEDetectionPolling(true);
+
+    let attempts = 0;
+    const maxAttempts = 6; // 3 seconds total (6 * 500ms)
+    
+    log(`Attempting to restore ${draftData.type} editor...`);
+    
+    const waitInterval = setInterval(() => {
+        attempts++;
+        const editorData = activeEditors.get(draftData.type);
         
-        // Wait specifically for this one
-        const waitInterval = setInterval(() => {
-            if (activeEditors.has(draftData.type)) {
+        if (editorData && editorData.editor) {
+            const isReady = typeof editorData.editor.getContent === 'function' && 
+                             !editorData.editor.removed;
+            
+            if (isReady) {
                 clearInterval(waitInterval);
                 performRestore(draftData);
+                return;
             }
-        }, 500);
-        
-        // Timeout wait
-        setTimeout(() => clearInterval(waitInterval), 10000);
-    }
+        }
+
+        if (attempts >= maxAttempts) {
+            clearInterval(waitInterval);
+            log(`Could not restore automatically after ${attempts} attempts.`);
+            // Show persistent error as requested (10 seconds)
+            showStatusToast(`Error de GISE, Texto en el portapapeles`, 10000);
+        }
+    }, 500);
   }
+
+
 
   async function performRestore(draftData) {
     const data = activeEditors.get(draftData.type);
@@ -280,24 +308,34 @@
     
     log(`Performing restoration for ${draftData.type}...`);
     try {
-        data.editor.setContent(draftData.content);
-        data.editor.save();
-        data.lastSavedContent = draftData.content;
+        const doRestore = () => {
+            data.editor.setContent(draftData.content);
+            data.editor.save();
+            data.lastSavedContent = draftData.content;
 
-        if (data.textarea) {
-          data.textarea.dispatchEvent(new Event('input', { bubbles: true }));
-          data.textarea.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        
-        showStatusToast(`Borrador de ${DRAFT_TYPES[draftData.type].label} restaurado`);
+            if (data.textarea) {
+              data.textarea.dispatchEvent(new Event('input', { bubbles: true }));
+              data.textarea.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        };
 
-        // Non-blocking clipboard copy
-        copyToClipboard(draftData.content).then(success => {
-            if (success) showStatusToast(`Borrador de ${DRAFT_TYPES[draftData.type].label} rest. y copiado`);
-        });
+        doRestore();
+
+        // Verification and potential retry
+        setTimeout(() => {
+            const currentContent = data.editor.getContent();
+            if (currentContent.length < 5 && draftData.content.length > 10) {
+                log('Restoration seemed to fail (content empty). Retrying...');
+                doRestore();
+            }
+            
+            showStatusToast(`Borrador de ${DRAFT_TYPES[draftData.type].label} restaurado`);
+        }, 100);
 
     } catch (e) { log('Restoration error:', e); }
   }
+
+
 
   // --- UI INDICATOR ---
 
@@ -360,7 +398,7 @@
     };
   }
 
-  function showStatusToast(message) {
+  function showStatusToast(message, duration = TOAST_SUCCESS_MS) {
     if (!toastContainer) setupToastContainer();
 
     const toast = document.createElement('div');
@@ -372,8 +410,9 @@
 
     setTimeout(() => {
         hideToast(toast);
-    }, TOAST_SUCCESS_MS);
+    }, duration);
   }
+
 
   function hideToast(toast) {
     toast.classList.remove('show');
