@@ -14,6 +14,7 @@ A professional browser extension that automatically saves drafts for **Tasks, Fo
 ## Instalación para Técnicos
 
 ### Google Chrome / Microsoft Edge / Brave
+
 La forma más sencilla de instalar la extensión es usar el archivo `.zip`:
 
 1. Descarga el archivo `glpi-draft-saver-pro-v2.0.0.zip`.
@@ -26,7 +27,9 @@ La forma más sencilla de instalar la extensión es usar el archivo `.zip`:
 6. Selecciona la carpeta donde extrajiste los archivos.
 
 ### Mozilla Firefox
+
 Firefox requiere que las extensiones estén firmadas por Mozilla para ser instaladas de forma permanente. Si el departamento de IT ha proporcionado el archivo `.xpi` (versión firmada No Listada en AMO):
+
 1. Asegúrate de tener el archivo descargado (ej. `glpi-draft-saver-pro.xpi`).
 2. Abre Firefox y entra en `about:addons`.
 3. Arrastra el archivo `.xpi` hacia la ventana del navegador.
