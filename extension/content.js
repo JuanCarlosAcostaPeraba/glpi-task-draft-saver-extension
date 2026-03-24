@@ -65,14 +65,20 @@
   let isPolling = false;
   let currentPosition = 'bottom-right';
 
-  // Listen for configuration changes
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'sync' && changes.toastPosition) {
-        log('Position changed to:', changes.toastPosition.newValue);
-        currentPosition = changes.toastPosition.newValue;
-        applyContainerPosition();
+  // Listen for configuration updates from the Bridge via postMessage
+  window.addEventListener('message', (event) => {
+    // Only accept messages from our bridge
+    if (event.data && event.data.source === 'glpi-draft-saver-bridge' && event.data.type === 'config-updated') {
+        const config = event.data.config;
+        if (config && config.toastPosition) {
+            log('Config updated from bridge:', config.toastPosition);
+            currentPosition = config.toastPosition;
+            applyContainerPosition();
+        }
     }
   });
+
+
 
 
   /**
@@ -87,20 +93,21 @@
   /**
    * Main entry point
    */
-  async function init() {
+  function init() {
     if (window.location.pathname !== TARGET_PATHNAME) return;
 
     ticketId = getValidatedTicketId();
     if (!ticketId) return;
 
-    // Load initial position from storage
-    try {
-        const result = await chrome.storage.sync.get({ toastPosition: 'bottom-right' });
-        currentPosition = result.toastPosition;
-        log('Initial position loaded:', currentPosition);
-    } catch (e) { log('Error loading position:', e); }
+    // Request initial position from bridge
+    window.postMessage({
+        source: 'glpi-draft-saver-content',
+        type: 'request-config'
+    }, '*');
+
 
     setupToastContainer();
+
     
     // Check for drafts IMMEDIATELY on load
     checkForAvailableDrafts();

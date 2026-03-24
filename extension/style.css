@@ -9,15 +9,16 @@
 }
 
 /* Position Classes */
-.glpi-draft-saver-toast-container.bottom-right { bottom: 20px; right: 20px; align-items: flex-end; }
-.glpi-draft-saver-toast-container.top-right { top: 20px; right: 20px; align-items: flex-end; }
-.glpi-draft-saver-toast-container.bottom-left { bottom: 20px; left: 20px; align-items: flex-start; }
-.glpi-draft-saver-toast-container.top-left { top: 20px; left: 20px; align-items: flex-start; }
-.glpi-draft-saver-toast-container.center { top: 50%; left: 50%; transform: translate(-50%, -50%); align-items: center; }
-.glpi-draft-saver-toast-container.top-center { top: 20px; left: 50%; transform: translateX(-50%); align-items: center; }
-.glpi-draft-saver-toast-container.bottom-center { bottom: 20px; left: 50%; transform: translateX(-50%); align-items: center; }
-.glpi-draft-saver-toast-container.right-center { right: 20px; top: 50%; transform: translateY(-50%); align-items: flex-end; }
-.glpi-draft-saver-toast-container.left-center { left: 20px; top: 50%; transform: translateY(-50%); align-items: flex-start; }
+.glpi-draft-saver-toast-container.bottom-right { bottom: 20px; right: 20px; align-items: flex-end; flex-direction: column-reverse; }
+.glpi-draft-saver-toast-container.top-right { top: 20px; right: 20px; align-items: flex-end; flex-direction: column; }
+.glpi-draft-saver-toast-container.bottom-left { bottom: 20px; left: 20px; align-items: flex-start; flex-direction: column-reverse; }
+.glpi-draft-saver-toast-container.top-left { top: 20px; left: 20px; align-items: flex-start; flex-direction: column; }
+.glpi-draft-saver-toast-container.center { top: 50%; left: 50%; transform: translate(-50%, -50%); align-items: center; flex-direction: column; }
+.glpi-draft-saver-toast-container.top-center { top: 20px; left: 50%; transform: translateX(-50%); align-items: center; flex-direction: column; }
+.glpi-draft-saver-toast-container.bottom-center { bottom: 20px; left: 50%; transform: translateX(-50%); align-items: center; flex-direction: column-reverse; }
+.glpi-draft-saver-toast-container.right-center { right: 20px; top: 50%; transform: translateY(-50%); align-items: flex-end; flex-direction: column; }
+.glpi-draft-saver-toast-container.left-center { left: 20px; top: 50%; transform: translateY(-50%); align-items: flex-start; flex-direction: column; }
+
 
 
 .glpi-draft-saver-toast {
