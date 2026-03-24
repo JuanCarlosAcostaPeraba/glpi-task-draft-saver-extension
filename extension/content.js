@@ -1,7 +1,7 @@
 /**
  * GLPI Task Draft Saver - content.js (Smart UX Edition)
  * Automatically saves drafts and provides UI to restore or copy them to clipboard.
- * Now supports automated task form opening on restoration.
+ * Supports Tasks, Follow-ups, Solutions, and Validations.
  */
 
 (function () {
@@ -23,25 +23,46 @@
   const POLLING_INTERVAL_MS = 1000;
   const POLLING_MAX_TIME_MS = 30000;
 
-  const STORAGE_KEY_PREFIX = 'glpi_draft_ticket_';
-  const SUBMIT_FLAG_PREFIX = 'glpi_submit_attempt_';
+  const LEGACY_STORAGE_KEY_PREFIX = 'glpi_draft_ticket_';
   const TARGET_PATHNAME = '/front/ticket.form.php';
   
-  // Selectors
-  const TASK_BUTTON_SELECTOR = 'button.action-task, button[data-bs-target="#new-TicketTask-block"]';
-  const TEXTAREA_SELECTOR = 'textarea[name="content"][id]';
+  const DRAFT_TYPES = {
+    followup: {
+      id: 'followup',
+      label: 'Seguimiento',
+      blockSelector: '#new-ITILFollowup-block',
+      buttonSelector: 'button[data-bs-target="#new-ITILFollowup-block"]',
+      storageKey: 'glpi_draft_followup_ticket_'
+    },
+    task: {
+      id: 'task',
+      label: 'Tarea',
+      blockSelector: '#new-TicketTask-block',
+      buttonSelector: 'button.action-task, button[data-bs-target="#new-TicketTask-block"]',
+      storageKey: 'glpi_draft_task_ticket_'
+    },
+    solution: {
+      id: 'solution',
+      label: 'Solución',
+      blockSelector: '#new-ITILSolution-block',
+      buttonSelector: 'button[data-bs-target="#new-ITILSolution-block"]',
+      storageKey: 'glpi_draft_solution_ticket_'
+    },
+    validation: {
+      id: 'validation',
+      label: 'Validación',
+      blockSelector: '#new-TicketValidation-block',
+      buttonSelector: 'button[data-bs-target="#new-TicketValidation-block"]',
+      storageKey: 'glpi_draft_validation_ticket_'
+    }
+  };
 
   // --- STATE ---
   let ticketId = null;
-  let targetTextarea = null;
-  let tinymceEditor = null;
-  let debounceTimer = null;
+  const activeEditors = new Map(); // type -> { textarea, editor, lastSavedContent, debounceTimer }
   let autosaveInterval = null;
-  let toastElement = null;
-  let toastTimer = null;
-  let pollingStartTime = 0;
+  let toastContainer = null;
   let isPolling = false;
-  let lastSavedContent = '';
 
   /**
    * Internal logger
@@ -61,10 +82,10 @@
     ticketId = getValidatedTicketId();
     if (!ticketId) return;
 
-    setupToastIndicator();
+    setupToastContainer();
     
-    // Check for draft IMMEDIATELY on load
-    checkForAvailableDraft();
+    // Check for drafts IMMEDIATELY on load
+    checkForAvailableDrafts();
 
     // Start polling for general editor detection (autosave)
     startTinyMCEDetectionPolling();
@@ -72,53 +93,61 @@
 
   // --- EDITOR DETECTION ---
 
-  function startTinyMCEDetectionPolling(callbackOnFound = null) {
-    if (isPolling && !callbackOnFound) return;
+  function startTinyMCEDetectionPolling() {
+    if (isPolling) return;
     isPolling = true;
-    pollingStartTime = Date.now();
+    const pollingStartTime = Date.now();
 
-    log('Polling for TinyMCE editor...');
+    log('Polling for TinyMCE editors...');
 
     const poll = setInterval(() => {
-      const textareas = Array.from(document.querySelectorAll(TEXTAREA_SELECTOR));
-      
-      if (textareas.length > 0) {
-        const taskTextarea = textareas.find(el => {
-            const id = el.id.toLowerCase();
-            return id.startsWith('content_') && !id.startsWith('solution_content_');
-        });
+      let foundAnyNew = false;
 
-        if (taskTextarea) {
-          const tinymce = window.tinymce;
-          if (tinymce && typeof tinymce.get === 'function') {
-            const editor = tinymce.get(taskTextarea.id);
+      for (const [type, config] of Object.entries(DRAFT_TYPES)) {
+        if (activeEditors.has(type)) continue;
 
-            // Check readiness (must have standard methods)
-            if (editor && typeof editor.getContent === 'function' && typeof editor.save === 'function') {
-              targetTextarea = taskTextarea;
-              tinymceEditor = editor;
-              clearInterval(poll);
-              isPolling = false;
-              log(`Success: Found Task editor [${taskTextarea.id}].`);
-              
-              onEditorFound();
-              if (callbackOnFound) callbackOnFound();
-            }
+        const block = document.querySelector(config.blockSelector);
+        if (!block) continue;
+
+        const textarea = block.querySelector('textarea');
+        if (!textarea || !textarea.id) continue;
+
+        const tinymce = window.tinymce;
+        if (tinymce && typeof tinymce.get === 'function') {
+          const editor = tinymce.get(textarea.id);
+
+          // Check readiness (must have standard methods)
+          if (editor && typeof editor.getContent === 'function' && typeof editor.save === 'function') {
+            log(`Success: Found ${config.label} editor [${textarea.id}].`);
+            
+            const editorData = {
+                textarea: textarea,
+                editor: editor,
+                lastSavedContent: '',
+                debounceTimer: null
+            };
+            activeEditors.set(type, editorData);
+            attachListeners(type);
+            foundAnyNew = true;
           }
         }
       }
 
-      if (isPolling && (Date.now() - pollingStartTime > POLLING_MAX_TIME_MS)) {
+      if (foundAnyNew) {
+        if (activeEditors.size === Object.keys(DRAFT_TYPES).length) {
+            log('All potential editors found.');
+            clearInterval(poll);
+            isPolling = false;
+        }
+        startPeriodicBackup();
+      }
+
+      if (Date.now() - pollingStartTime > POLLING_MAX_TIME_MS) {
         clearInterval(poll);
         isPolling = false;
-        log('Polling timed out.');
+        log('Polling finished.');
       }
     }, POLLING_INTERVAL_MS);
-  }
-
-  function onEditorFound() {
-    attachListeners();
-    startPeriodicBackup();
   }
 
   // --- STORAGE & LOGIC ---
@@ -144,92 +173,123 @@
     }
   }
 
-  function saveDraft() {
-    if (!ticketId || !tinymceEditor) return;
+  function saveDraft(type) {
+    const data = activeEditors.get(type);
+    if (!ticketId || !data || !data.editor) return;
+
+    const config = DRAFT_TYPES[type];
 
     try {
-      tinymceEditor.save();
-      const currentHtml = tinymceEditor.getContent();
+      data.editor.save();
+      const currentHtml = data.editor.getContent();
       const plainText = htmlToPlainText(currentHtml);
 
       if (plainText.length >= MIN_CONTENT_LENGTH) {
-        if (currentHtml !== lastSavedContent) {
+        if (currentHtml !== data.lastSavedContent) {
           const draftData = {
             ticketId: ticketId,
+            type: type,
             content: currentHtml,
             savedAt: new Date().toISOString()
           };
           
-          localStorage.setItem(STORAGE_KEY_PREFIX + ticketId, JSON.stringify(draftData));
-          lastSavedContent = currentHtml;
-          showStatusToast('Borrador guardado');
+          localStorage.setItem(config.storageKey + ticketId, JSON.stringify(draftData));
+          data.lastSavedContent = currentHtml;
+          showStatusToast(`Borrador de ${config.label} guardado`);
         }
       }
     } catch (e) {
-      console.error('[GLPI Draft Saver] Error during save:', e);
+      console.error(`[GLPI Draft Saver] Error during save (${type}):`, e);
     }
   }
 
-  function checkForAvailableDraft() {
+  function checkForAvailableDrafts() {
     try {
-      const rawData = localStorage.getItem(STORAGE_KEY_PREFIX + ticketId);
-      if (!rawData) return;
+      for (const [type, config] of Object.entries(DRAFT_TYPES)) {
+        let rawData = localStorage.getItem(config.storageKey + ticketId);
+        
+        // Legacy support for tasks
+        if (!rawData && type === 'task') {
+            rawData = localStorage.getItem(LEGACY_STORAGE_KEY_PREFIX + ticketId);
+            if (rawData) {
+                log('Found legacy task draft. Migrating...');
+                localStorage.setItem(config.storageKey + ticketId, rawData);
+                localStorage.removeItem(LEGACY_STORAGE_KEY_PREFIX + ticketId);
+            }
+        }
 
-      const draftData = JSON.parse(rawData);
-      
-      // If editor exists and has content, skip prompt
-      if (tinymceEditor) {
-          const plainText = htmlToPlainText(tinymceEditor.getContent());
-          if (plainText !== '') return;
+        if (!rawData) continue;
+
+        const draftData = JSON.parse(rawData);
+        
+        // If editor exists and has content, skip prompt
+        const existingEditor = activeEditors.get(type);
+        if (existingEditor) {
+            const plainText = htmlToPlainText(existingEditor.editor.getContent());
+            if (plainText !== '') continue;
+        }
+
+        log(`Found ${type} draft from ${draftData.savedAt}. Showing prompt.`);
+        showRestorePrompt(draftData);
       }
-
-      log(`Found draft from ${draftData.savedAt}. Showing prompt.`);
-      showRestorePrompt(draftData);
     } catch (e) { log('Draft check error:', e); }
   }
 
   /**
    * Logic to handle the 'Restore' button click.
-   * Ensures the task form is visible by clicking the button, then restores content.
+   * Ensures the correct form block is visible by clicking the button, then restores content.
    */
   function handleRestoreAction(draftData) {
-    const taskBtn = document.querySelector(TASK_BUTTON_SELECTOR);
+    const config = DRAFT_TYPES[draftData.type];
+    const btn = document.querySelector(config.buttonSelector);
     
     // Always attempt to click to show form
-    if (taskBtn) {
-        log('Clicking Task button for visibility.');
-        taskBtn.click();
+    if (btn) {
+        log(`Clicking ${draftData.type} button for visibility.`);
+        btn.click();
     }
 
-    if (tinymceEditor) {
+    const editorData = activeEditors.get(draftData.type);
+    if (editorData) {
         performRestore(draftData);
     } else {
-        log('Waiting for editor initialization...');
-        startTinyMCEDetectionPolling(() => {
-            performRestore(draftData);
-        });
+        log(`Waiting for ${draftData.type} editor initialization...`);
+        // We might need to restart polling if it stopped
+        startTinyMCEDetectionPolling();
+        
+        // Wait specifically for this one
+        const waitInterval = setInterval(() => {
+            if (activeEditors.has(draftData.type)) {
+                clearInterval(waitInterval);
+                performRestore(draftData);
+            }
+        }, 500);
+        
+        // Timeout wait
+        setTimeout(() => clearInterval(waitInterval), 10000);
     }
   }
 
   async function performRestore(draftData) {
-    if (!tinymceEditor) return;
+    const data = activeEditors.get(draftData.type);
+    if (!data || !data.editor) return;
     
-    log('Performing restoration...');
+    log(`Performing restoration for ${draftData.type}...`);
     try {
-        tinymceEditor.setContent(draftData.content);
-        tinymceEditor.save();
-        lastSavedContent = draftData.content;
+        data.editor.setContent(draftData.content);
+        data.editor.save();
+        data.lastSavedContent = draftData.content;
 
-        if (targetTextarea) {
-          targetTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-          targetTextarea.dispatchEvent(new Event('change', { bubbles: true }));
+        if (data.textarea) {
+          data.textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          data.textarea.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
-        showStatusToast('Borrador restaurado');
+        showStatusToast(`Borrador de ${DRAFT_TYPES[draftData.type].label} restaurado`);
 
         // Non-blocking clipboard copy
         copyToClipboard(draftData.content).then(success => {
-            if (success) showStatusToast('Borrador restaurado y copiado');
+            if (success) showStatusToast(`Borrador de ${DRAFT_TYPES[draftData.type].label} rest. y copiado`);
         });
 
     } catch (e) { log('Restoration error:', e); }
@@ -237,106 +297,106 @@
 
   // --- UI INDICATOR ---
 
-  function setupToastIndicator() {
-    if (document.getElementById('glpi-draft-saver-toast')) return;
-    
-    toastElement = document.createElement('div');
-    toastElement.id = 'glpi-draft-saver-toast';
-    toastElement.className = 'glpi-draft-saver-toast';
-    toastElement.style.cssText = 'display: none !important;'; 
-
-    if (document.body) {
-      document.body.appendChild(toastElement);
-    } else {
-      window.addEventListener('load', () => {
-          if (!document.getElementById('glpi-draft-saver-toast')) {
-              document.body.appendChild(toastElement);
-          }
-      });
+  function setupToastContainer() {
+    if (document.getElementById('glpi-draft-saver-toast-container')) {
+        toastContainer = document.getElementById('glpi-draft-saver-toast-container');
+        return;
     }
+    
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'glpi-draft-saver-toast-container';
+    toastContainer.className = 'glpi-draft-saver-toast-container';
+    document.body.appendChild(toastContainer);
   }
 
   function showRestorePrompt(draftData) {
-    if (!toastElement) return;
-    if (toastTimer) clearTimeout(toastTimer);
+    if (!toastContainer) setupToastContainer();
 
+    const toastId = `toast-restore-${draftData.type}-${ticketId}`;
+    if (document.getElementById(toastId)) return;
+
+    const config = DRAFT_TYPES[draftData.type];
     const savedDate = new Date(draftData.savedAt).toLocaleString();
     
-    toastElement.innerHTML = `
-      <div><strong>Borrador encontrado</strong></div>
+    const toast = document.createElement('div');
+    toast.id = toastId;
+    toast.className = 'glpi-draft-saver-toast restore-prompt';
+    toast.innerHTML = `
+      <div><strong>Borrador de ${config.label}</strong></div>
       <div style="font-size: 11px; opacity: 0.8;">Guardado: ${savedDate}</div>
       <div class="toast-actions">
-        <button id="glpi-btn-restore">Restaurar ahora</button>
-        <button id="glpi-btn-copy" class="secondary">Copiar</button>
-        <button id="glpi-btn-dismiss" class="secondary">Ignorar</button>
+        <button class="glpi-btn-restore">Restaurar</button>
+        <button class="glpi-btn-copy secondary">Copiar</button>
+        <button class="glpi-btn-dismiss secondary">Ignorar</button>
       </div>
     `;
 
-    toastElement.style.setProperty('display', 'flex', 'important');
-    toastElement.classList.add('show');
+    toastContainer.appendChild(toast);
+    
+    // Trigger animation
+    setTimeout(() => toast.classList.add('show'), 10);
 
-    document.getElementById('glpi-btn-restore').onclick = () => {
+    toast.querySelector('.glpi-btn-restore').onclick = () => {
         handleRestoreAction(draftData);
-        hideToast();
+        hideToast(toast);
     };
 
-    document.getElementById('glpi-btn-copy').onclick = async () => {
+    toast.querySelector('.glpi-btn-copy').onclick = async () => {
         await copyToClipboard(draftData.content);
         showStatusToast('Copiado al portapapeles');
     };
 
-    document.getElementById('glpi-btn-dismiss').onclick = () => {
-        log('User dismissed and deleted draft.');
-        try { localStorage.removeItem(STORAGE_KEY_PREFIX + ticketId); } catch (e) {}
-        hideToast();
+    toast.querySelector('.glpi-btn-dismiss').onclick = () => {
+        log(`User dismissed and deleted ${draftData.type} draft.`);
+        try { localStorage.removeItem(config.storageKey + ticketId); } catch (e) {}
+        hideToast(toast);
     };
   }
 
   function showStatusToast(message) {
-    if (!toastElement || !toastElement.parentNode) return;
-    if (toastElement.querySelector('#glpi-btn-restore')) return;
+    if (!toastContainer) setupToastContainer();
 
-    if (toastTimer) clearTimeout(toastTimer);
-    
-    toastElement.innerHTML = `<div>${message}</div>`;
-    toastElement.style.setProperty('display', 'flex', 'important');
-    toastElement.classList.add('show');
+    const toast = document.createElement('div');
+    toast.className = 'glpi-draft-saver-toast status-toast';
+    toast.innerHTML = `<div>${message}</div>`;
+    toastContainer.appendChild(toast);
 
-    toastTimer = setTimeout(hideToast, TOAST_SUCCESS_MS);
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    setTimeout(() => {
+        hideToast(toast);
+    }, TOAST_SUCCESS_MS);
   }
 
-  function hideToast() {
-    if (!toastElement) return;
-    toastElement.classList.remove('show');
-    setTimeout(() => { 
-        toastElement.style.setProperty('display', 'none', 'important');
-    }, 300);
-    toastTimer = null;
+  function hideToast(toast) {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
   }
 
   // --- LISTENERS & BACKUP ---
 
-  function attachListeners() {
-    if (!tinymceEditor) return;
+  function attachListeners(type) {
+    const data = activeEditors.get(type);
+    if (!data || !data.editor) return;
 
     const events = ['input', 'change', 'keyup', 'undo', 'redo'];
     events.forEach(eventType => {
-      tinymceEditor.off(eventType);
-      tinymceEditor.on(eventType, () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(saveDraft, DEBOUNCE_DELAY_MS);
+      data.editor.off(eventType);
+      data.editor.on(eventType, () => {
+        clearTimeout(data.debounceTimer);
+        data.debounceTimer = setTimeout(() => saveDraft(type), DEBOUNCE_DELAY_MS);
       });
     });
 
-    if (targetTextarea) {
-      const parentForm = targetTextarea.closest('form');
+    if (data.textarea) {
+      const parentForm = data.textarea.closest('form');
       if (parentForm) {
         parentForm.addEventListener('submit', () => {
-          log('Form submitted. Cleaning up draft.');
+          log(`Form for ${type} submitted. Cleaning up draft.`);
           try {
-            localStorage.removeItem(STORAGE_KEY_PREFIX + ticketId);
+            localStorage.removeItem(DRAFT_TYPES[type].storageKey + ticketId);
           } catch (e) {
-            log('Error cleaning up draft on submit:', e);
+            log(`Error cleaning up ${type} draft on submit:`, e);
           }
         });
       }
@@ -345,7 +405,11 @@
 
   function startPeriodicBackup() {
     if (autosaveInterval) clearInterval(autosaveInterval);
-    autosaveInterval = setInterval(saveDraft, AUTOSAVE_INTERVAL_MS);
+    autosaveInterval = setInterval(() => {
+        for (const type of activeEditors.keys()) {
+            saveDraft(type);
+        }
+    }, AUTOSAVE_INTERVAL_MS);
   }
 
   function getValidatedTicketId() {
