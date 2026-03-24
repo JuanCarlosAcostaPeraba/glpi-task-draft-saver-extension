@@ -1,23 +1,27 @@
 /* Draft Saver Toast Styles */
 .glpi-draft-saver-toast-container {
   position: fixed;
-  display: flex;
-  flex-direction: column;
+  display: flex; /* Always flex now, positioning handles visibility */
+  flex-direction: column-reverse; /* Default Bottom Right */
+  bottom: 20px;
+  right: 20px;
   gap: 10px;
   z-index: 2147483647;
   pointer-events: none;
 }
 
-/* Position Classes */
-.glpi-draft-saver-toast-container.bottom-right { bottom: 20px; right: 20px; align-items: flex-end; flex-direction: column-reverse; }
-.glpi-draft-saver-toast-container.top-right { top: 20px; right: 20px; align-items: flex-end; flex-direction: column; }
-.glpi-draft-saver-toast-container.bottom-left { bottom: 20px; left: 20px; align-items: flex-start; flex-direction: column-reverse; }
-.glpi-draft-saver-toast-container.top-left { top: 20px; left: 20px; align-items: flex-start; flex-direction: column; }
-.glpi-draft-saver-toast-container.center { top: 50%; left: 50%; transform: translate(-50%, -50%); align-items: center; flex-direction: column; }
-.glpi-draft-saver-toast-container.top-center { top: 20px; left: 50%; transform: translateX(-50%); align-items: center; flex-direction: column; }
-.glpi-draft-saver-toast-container.bottom-center { bottom: 20px; left: 50%; transform: translateX(-50%); align-items: center; flex-direction: column-reverse; }
-.glpi-draft-saver-toast-container.right-center { right: 20px; top: 50%; transform: translateY(-50%); align-items: flex-end; flex-direction: column; }
-.glpi-draft-saver-toast-container.left-center { left: 20px; top: 50%; transform: translateY(-50%); align-items: flex-start; flex-direction: column; }
+/* Position Overrides via HTML Attribute */
+html[data-glpi-draft-saver-pos="bottom-right"] .glpi-draft-saver-toast-container { bottom: 20px; right: 20px; top: auto; left: auto; align-items: flex-end; flex-direction: column-reverse; }
+html[data-glpi-draft-saver-pos="top-right"] .glpi-draft-saver-toast-container { top: 20px; right: 20px; bottom: auto; left: auto; align-items: flex-end; flex-direction: column; }
+html[data-glpi-draft-saver-pos="bottom-left"] .glpi-draft-saver-toast-container { bottom: 20px; left: 20px; top: auto; right: auto; align-items: flex-start; flex-direction: column-reverse; }
+html[data-glpi-draft-saver-pos="top-left"] .glpi-draft-saver-toast-container { top: 20px; left: 20px; bottom: auto; right: auto; align-items: flex-start; flex-direction: column; }
+html[data-glpi-draft-saver-pos="center"] .glpi-draft-saver-toast-container { top: 50%; left: 50%; transform: translate(-50%, -50%); bottom: auto; right: auto; align-items: center; flex-direction: column; }
+html[data-glpi-draft-saver-pos="top-center"] .glpi-draft-saver-toast-container { top: 20px; left: 50%; transform: translateX(-50%); bottom: auto; right: auto; align-items: center; flex-direction: column; }
+html[data-glpi-draft-saver-pos="bottom-center"] .glpi-draft-saver-toast-container { bottom: 20px; left: 50%; transform: translateX(-50%); top: auto; right: auto; align-items: center; flex-direction: column-reverse; }
+html[data-glpi-draft-saver-pos="right-center"] .glpi-draft-saver-toast-container { right: 20px; top: 50%; transform: translateY(-50%); bottom: auto; left: auto; align-items: flex-end; flex-direction: column; }
+html[data-glpi-draft-saver-pos="left-center"] .glpi-draft-saver-toast-container { left: 20px; top: 50%; transform: translateY(-50%); bottom: auto; right: auto; align-items: flex-start; flex-direction: column; }
+
+
 
 
 

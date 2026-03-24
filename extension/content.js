@@ -63,27 +63,11 @@
   let autosaveInterval = null;
   let toastContainer = null;
   let isPolling = false;
-  let currentPosition = 'bottom-right';
-
-  // Listen for configuration updates from the Bridge via postMessage
-  window.addEventListener('message', (event) => {
-    // Only accept messages from our bridge
-    if (event.data && event.data.source === 'glpi-draft-saver-bridge' && event.data.type === 'config-updated') {
-        const config = event.data.config;
-        if (config && config.toastPosition) {
-            log('Config updated from bridge:', config.toastPosition);
-            currentPosition = config.toastPosition;
-            applyContainerPosition();
-        }
-    }
-  });
-
-
-
 
   /**
    * Internal logger
    */
+
   function log(...args) {
     if (DEBUG) {
       console.log(`[DraftSaver ${INSTANCE_ID}]`, ...args);
@@ -99,14 +83,8 @@
     ticketId = getValidatedTicketId();
     if (!ticketId) return;
 
-    // Request initial position from bridge
-    window.postMessage({
-        source: 'glpi-draft-saver-content',
-        type: 'request-config'
-    }, '*');
-
-
     setupToastContainer();
+
 
     
     // Check for drafts IMMEDIATELY on load
@@ -332,25 +310,10 @@
     toastContainer = document.createElement('div');
     toastContainer.id = 'glpi-draft-saver-toast-container';
     toastContainer.className = 'glpi-draft-saver-toast-container';
-    applyContainerPosition();
     document.body.appendChild(toastContainer);
   }
 
 
-  function applyContainerPosition() {
-    if (!toastContainer) return;
-    
-    // Remove existing position classes
-    const positions = [
-        'bottom-right', 'top-right', 'bottom-left', 'top-left', 
-        'center', 'top-center', 'bottom-center', 'right-center', 'left-center'
-    ];
-    positions.forEach(pos => toastContainer.classList.remove(pos));
-    
-    // Add current position
-    toastContainer.classList.add(currentPosition);
-    log(`Applied position: ${currentPosition}`);
-  }
 
 
   function showRestorePrompt(draftData) {
