@@ -67,12 +67,14 @@ html[data-glpi-draft-saver-theme="dark"] {
 
 .glpi-draft-saver-toast.status-toast {
   background-color: rgba(40, 100, 40, 0.9);
+  color: #ffffff; /* Always white for dark green task toast */
   padding: 8px 15px;
   min-width: auto;
 }
 
 .glpi-draft-saver-toast.warning-toast {
   background-color: rgba(220, 90, 0, 0.95); /* Warning orange */
+  color: #ffffff; /* Always white for orange warning toast */
   padding: 8px 15px;
   min-width: auto;
 }
@@ -104,10 +106,22 @@ html[data-glpi-draft-saver-theme="dark"] {
 
 .glpi-draft-saver-toast button.secondary {
   background-color: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--toast-color);
+  border: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 .glpi-draft-saver-toast button.secondary:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode overrides for secondary button */
+html[data-glpi-draft-saver-theme="dark"] .glpi-draft-saver-toast button.secondary {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+html[data-glpi-draft-saver-theme="dark"] .glpi-draft-saver-toast button.secondary:hover {
   background-color: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.5);
 }
