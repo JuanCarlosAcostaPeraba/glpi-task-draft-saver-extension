@@ -6,25 +6,37 @@
 (function() {
     'use strict';
 
-    function updateDOMAttribute(position) {
-        if (position) {
-            document.documentElement.setAttribute('data-glpi-draft-saver-pos', position);
-            // console.log('[Bridge] DOM Attribute updated:', position);
+    function updateDOMAttributes(items) {
+        if (items.toastPosition) {
+            document.documentElement.setAttribute('data-glpi-draft-saver-pos', items.toastPosition);
+        }
+        if (items.pluginEnabled !== undefined) {
+            document.documentElement.setAttribute('data-glpi-draft-saver-enabled', items.pluginEnabled);
+        }
+        if (items.theme) {
+            document.documentElement.setAttribute('data-glpi-draft-saver-theme', items.theme);
         }
     }
 
     // 1. Initial Load
     chrome.storage.sync.get({
-        toastPosition: 'bottom-right'
+        toastPosition: 'bottom-right',
+        pluginEnabled: true,
+        theme: 'light'
     }, (items) => {
-        updateDOMAttribute(items.toastPosition);
+        updateDOMAttributes(items);
     });
 
     // 2. Listen for changes
     chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'sync' && (changes.toastPosition)) {
-            updateDOMAttribute(changes.toastPosition.newValue);
+        if (area === 'sync') {
+            const newValues = {};
+            for (let [key, { newValue }] of Object.entries(changes)) {
+                newValues[key] = newValue;
+            }
+            updateDOMAttributes(newValues);
         }
     });
 
 })();
+

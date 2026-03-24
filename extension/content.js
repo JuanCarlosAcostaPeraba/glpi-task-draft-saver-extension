@@ -63,6 +63,7 @@
   let autosaveInterval = null;
   let toastContainer = null;
   let isPolling = false;
+  let settingsObserver = null;
 
   /**
    * Internal logger
@@ -74,6 +75,10 @@
     }
   }
 
+  function isEnabled() {
+    return document.documentElement.getAttribute('data-glpi-draft-saver-enabled') !== 'false';
+  }
+
   /**
    * Main entry point
    */
@@ -83,9 +88,15 @@
     ticketId = getValidatedTicketId();
     if (!ticketId) return;
 
+    setupSettingsObserver();
+
+    if (!isEnabled()) {
+      log('Plugin is disabled in settings.');
+      return;
+    }
+
+    log('Initializing GLPI Draft Saver...');
     setupToastContainer();
-
-
     
     // Check for drafts IMMEDIATELY on load
     checkForAvailableDrafts();
@@ -93,6 +104,47 @@
     // Start polling for general editor detection (autosave)
     startTinyMCEDetectionPolling();
   }
+
+  function setupSettingsObserver() {
+    if (settingsObserver) return;
+
+    settingsObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'data-glpi-draft-saver-enabled') {
+          const enabled = isEnabled();
+          log('Plugin enabled state changed:', enabled);
+          if (enabled) {
+            init();
+          } else {
+            stopPlugin();
+          }
+        }
+      });
+    });
+
+    settingsObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-glpi-draft-saver-enabled']
+    });
+  }
+
+  function stopPlugin() {
+    log('Stopping plugin...');
+    if (autosaveInterval) {
+      clearInterval(autosaveInterval);
+      autosaveInterval = null;
+    }
+    if (window.__draft_saver_poll_interval) {
+      clearInterval(window.__draft_saver_poll_interval);
+    }
+    isPolling = false;
+    activeEditors.clear();
+    
+    if (toastContainer) {
+      toastContainer.innerHTML = '';
+    }
+  }
+
 
 
   // --- EDITOR DETECTION ---
