@@ -3,6 +3,13 @@
   "name": "GLPI Draft Saver Pro",
   "version": "1.1.0",
   "description": "Automatically saves drafts for tasks, follow-ups, solutions, and validations in GLPI.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Configuración de GLPI Draft Saver"
+  },
+  "permissions": [
+    "storage"
+  ],
   "host_permissions": [
     "https://*.huc.es/front/ticket.form.php*",
     "https://10.137.96.244/front/ticket.form.php*"

@@ -63,6 +63,17 @@
   let autosaveInterval = null;
   let toastContainer = null;
   let isPolling = false;
+  let currentPosition = 'bottom-right';
+
+  // Listen for configuration changes
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && changes.toastPosition) {
+        log('Position changed to:', changes.toastPosition.newValue);
+        currentPosition = changes.toastPosition.newValue;
+        applyContainerPosition();
+    }
+  });
+
 
   /**
    * Internal logger
@@ -76,11 +87,18 @@
   /**
    * Main entry point
    */
-  function init() {
+  async function init() {
     if (window.location.pathname !== TARGET_PATHNAME) return;
 
     ticketId = getValidatedTicketId();
     if (!ticketId) return;
+
+    // Load initial position from storage
+    try {
+        const result = await chrome.storage.sync.get({ toastPosition: 'bottom-right' });
+        currentPosition = result.toastPosition;
+        log('Initial position loaded:', currentPosition);
+    } catch (e) { log('Error loading position:', e); }
 
     setupToastContainer();
     
@@ -90,6 +108,7 @@
     // Start polling for general editor detection (autosave)
     startTinyMCEDetectionPolling();
   }
+
 
   // --- EDITOR DETECTION ---
 
@@ -306,8 +325,26 @@
     toastContainer = document.createElement('div');
     toastContainer.id = 'glpi-draft-saver-toast-container';
     toastContainer.className = 'glpi-draft-saver-toast-container';
+    applyContainerPosition();
     document.body.appendChild(toastContainer);
   }
+
+
+  function applyContainerPosition() {
+    if (!toastContainer) return;
+    
+    // Remove existing position classes
+    const positions = [
+        'bottom-right', 'top-right', 'bottom-left', 'top-left', 
+        'center', 'top-center', 'bottom-center', 'right-center', 'left-center'
+    ];
+    positions.forEach(pos => toastContainer.classList.remove(pos));
+    
+    // Add current position
+    toastContainer.classList.add(currentPosition);
+    log(`Applied position: ${currentPosition}`);
+  }
+
 
   function showRestorePrompt(draftData) {
     if (!toastContainer) setupToastContainer();
