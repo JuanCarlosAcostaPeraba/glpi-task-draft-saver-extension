@@ -16,7 +16,7 @@ A professional browser extension that automatically saves drafts for **Tasks, Fo
 ### Google Chrome / Microsoft Edge / Brave
 La forma más sencilla de instalar la extensión es usar el archivo `.zip`:
 
-1. Descarga el archivo `glpi-draft-saver-pro-v1.1.0.zip`.
+1. Descarga el archivo `glpi-draft-saver-pro-v2.0.0.zip`.
 2. Extrae el contenido en una carpeta en tu ordenador (ej. `C:\Extensiones\GLPI-Draft-Saver`).
 3. Abre tu navegador y ve a la página de extensiones:
    - Chrome/Brave: `chrome://extensions/`
