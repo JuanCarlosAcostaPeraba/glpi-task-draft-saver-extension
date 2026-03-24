@@ -8,3 +8,6 @@ Thumbs.db
 # Browser extension related
 *.crx
 *.pem
+
+# Zips
+*.zip
