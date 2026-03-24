@@ -1,22 +1,22 @@
-# GLPI Task Draft Saver
+# GLPI Draft Saver Pro
 
-A browser extension that automatically saves drafts written in GLPI ticket tasks to prevent data loss.
+A professional browser extension that automatically saves drafts for **Tasks, Follow-ups, Solutions, and Validations** in GLPI to prevent data loss.
 
 ## Features
 
-- **Automatic Autosave**: Saves drafts as you type (every 1 second with debounce).
-- **Periodic Backup**: Runs a backup every 5 seconds.
-- **Auto Restore**: Restores a saved draft if the editor is empty upon page load.
-- **Smart Cleanup**: Clears the saved draft after a successful form submission.
-- **Visual Feedback**: Shows a quiet "Draft saved" toast notification in the bottom-right corner.
-- **Secure & Private**: All data is stored locally in the browser's `localStorage`. No data is sent elsewhere.
+- **Multi-Editor Autosave**: Independently saves drafts for tasks, follow-ups, solutions, and validations.
+- **Smart Restoration**: Detects saved drafts and offers a single-click restoration that automatically opens the correct form block.
+- **Periodic Backup**: Automatically ensures your work is backed up every 5 seconds.
+- **Visual Feedback**: Clean, non-intrusive toasts with glassmorphism design.
+- **Legacy Support**: Automatically migrates old task drafts to the new multi-editor system.
+- **Secure & Private**: All data is stored locally in your browser's `localStorage`.
 
 ## Instalación para Técnicos
 
 ### Google Chrome / Microsoft Edge / Brave
 La forma más sencilla de instalar la extensión es usar el archivo `.zip`:
 
-1. Descarga el archivo `glpi-task-draft-saver.zip`.
+1. Descarga el archivo `glpi-draft-saver-pro-v1.1.0.zip`.
 2. Extrae el contenido en una carpeta en tu ordenador (ej. `C:\Extensiones\GLPI-Draft-Saver`).
 3. Abre tu navegador y ve a la página de extensiones:
    - Chrome/Brave: `chrome://extensions/`
@@ -27,7 +27,7 @@ La forma más sencilla de instalar la extensión es usar el archivo `.zip`:
 
 ### Mozilla Firefox
 Firefox requiere que las extensiones estén firmadas por Mozilla para ser instaladas de forma permanente. Si el departamento de IT ha proporcionado el archivo `.xpi` (versión firmada No Listada en AMO):
-1. Asegúrate de tener el archivo descargado (ej. `glpi-task-draft-saver.xpi`).
+1. Asegúrate de tener el archivo descargado (ej. `glpi-draft-saver-pro.xpi`).
 2. Abre Firefox y entra en `about:addons`.
 3. Arrastra el archivo `.xpi` hacia la ventana del navegador.
 4. Confirma la instalación cuando Firefox te pregunte.
@@ -37,6 +37,6 @@ Firefox requiere que las extensiones estén firmadas por Mozilla para ser instal
 ## Technical Details
 
 - **Target URL**: Only runs on GLPI ticket form pages requiring a `id` parameter.
-- **Storage Strategy**: Uses `localStorage` with the key format `glpi_draft_ticket_<ticketID>`.
-- **Editor Detection**: Detects standard `textarea` and `contenteditable` fields.
+- **Storage Strategy**: Uses `localStorage` with the key format `glpi_draft_<type>_ticket_<id>`.
+- **Editor Detection**: Detects standard `textarea` and TinyMCE fields inside ITIL blocks.
 - **Minimum Save Length**: Only saves if content is longer than 10 characters.
