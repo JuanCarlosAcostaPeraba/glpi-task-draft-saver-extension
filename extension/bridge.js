@@ -10,9 +10,6 @@
         if (items.toastPosition) {
             document.documentElement.setAttribute('data-glpi-draft-saver-pos', items.toastPosition);
         }
-        if (items.pluginEnabled !== undefined) {
-            document.documentElement.setAttribute('data-glpi-draft-saver-enabled', items.pluginEnabled);
-        }
         if (items.theme) {
             document.documentElement.setAttribute('data-glpi-draft-saver-theme', items.theme);
         }
@@ -21,7 +18,6 @@
     // 1. Initial Load
     chrome.storage.sync.get({
         toastPosition: 'bottom-right',
-        pluginEnabled: true,
         theme: 'light'
     }, (items) => {
         updateDOMAttributes(items);
@@ -39,4 +35,5 @@
     });
 
 })();
+
 

@@ -24,7 +24,7 @@
   const POLLING_MAX_TIME_MS = 30000;
 
   const LEGACY_STORAGE_KEY_PREFIX = 'glpi_draft_ticket_';
-  const TARGET_PATHNAME = '/front/ticket.form.php';
+  const TARGET_PATHNAME_SUFFIX = '/front/ticket.form.php';
   
   const DRAFT_TYPES = {
     followup: {
@@ -63,7 +63,7 @@
   let autosaveInterval = null;
   let toastContainer = null;
   let isPolling = false;
-  let settingsObserver = null;
+  let isInitialized = false;
 
   /**
    * Internal logger
@@ -75,27 +75,25 @@
     }
   }
 
-  function isEnabled() {
-    return document.documentElement.getAttribute('data-glpi-draft-saver-enabled') !== 'false';
-  }
-
   /**
    * Main entry point
    */
   function init() {
-    if (window.location.pathname !== TARGET_PATHNAME) return;
+    // Better path check (handles /glpi/front/...)
+    if (!window.location.pathname.endsWith(TARGET_PATHNAME_SUFFIX)) {
+        return;
+    }
 
     ticketId = getValidatedTicketId();
     if (!ticketId) return;
 
-    setupSettingsObserver();
-
-    if (!isEnabled()) {
-      log('Plugin is disabled in settings.');
-      return;
+    if (isInitialized) {
+        // log('Plugin already active. Skipping initialization.');
+        return;
     }
 
-    log('Initializing GLPI Draft Saver...');
+    log('Initializing GLPI Draft Saver core...');
+    isInitialized = true;
     setupToastContainer();
     
     // Check for drafts IMMEDIATELY on load
@@ -105,45 +103,7 @@
     startTinyMCEDetectionPolling();
   }
 
-  function setupSettingsObserver() {
-    if (settingsObserver) return;
 
-    settingsObserver = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'data-glpi-draft-saver-enabled') {
-          const enabled = isEnabled();
-          log('Plugin enabled state changed:', enabled);
-          if (enabled) {
-            init();
-          } else {
-            stopPlugin();
-          }
-        }
-      });
-    });
-
-    settingsObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-glpi-draft-saver-enabled']
-    });
-  }
-
-  function stopPlugin() {
-    log('Stopping plugin...');
-    if (autosaveInterval) {
-      clearInterval(autosaveInterval);
-      autosaveInterval = null;
-    }
-    if (window.__draft_saver_poll_interval) {
-      clearInterval(window.__draft_saver_poll_interval);
-    }
-    isPolling = false;
-    activeEditors.clear();
-    
-    if (toastContainer) {
-      toastContainer.innerHTML = '';
-    }
-  }
 
 
 

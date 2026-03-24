@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const pluginEnabledToggle = document.getElementById('plugin-enabled');
   const themeModeToggle = document.getElementById('theme-mode');
   const positionSelect = document.getElementById('toast-position');
   const status = document.getElementById('status');
@@ -22,11 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load current settings
   chrome.storage.sync.get({
     toastPosition: 'bottom-right',
-    pluginEnabled: true,
     theme: 'light'
   }, (items) => {
     positionSelect.value = items.toastPosition;
-    pluginEnabledToggle.checked = items.pluginEnabled;
     themeModeToggle.checked = items.theme === 'dark';
     applyTheme(items.theme === 'dark');
   });
@@ -35,13 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
   positionSelect.addEventListener('change', () => {
     chrome.storage.sync.set({
       toastPosition: positionSelect.value
-    }, showStatus);
-  });
-
-  // Save Enabled State
-  pluginEnabledToggle.addEventListener('change', () => {
-    chrome.storage.sync.set({
-      pluginEnabled: pluginEnabledToggle.checked
     }, showStatus);
   });
 
@@ -54,4 +44,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }, showStatus);
   });
 });
+
 
