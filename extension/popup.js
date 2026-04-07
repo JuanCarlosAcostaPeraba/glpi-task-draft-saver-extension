@@ -1,7 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
   const themeModeToggle = document.getElementById('theme-mode');
-  const positionSelect = document.getElementById('toast-position');
   const status = document.getElementById('status');
+  const positionBtns = document.querySelectorAll('.pos-btn');
+  const positionLabel = document.getElementById('position-label');
 
   function showStatus() {
     status.style.display = 'block';
@@ -18,21 +19,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function updateActivePosition(posValue) {
+    positionBtns.forEach(btn => {
+      if (btn.dataset.value === posValue) {
+        btn.classList.add('active');
+        if (positionLabel) positionLabel.textContent = btn.title;
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
   // Load current settings
   chrome.storage.sync.get({
     toastPosition: 'bottom-right',
     theme: 'light'
   }, (items) => {
-    positionSelect.value = items.toastPosition;
+    updateActivePosition(items.toastPosition);
     themeModeToggle.checked = items.theme === 'dark';
     applyTheme(items.theme === 'dark');
   });
 
   // Save Position
-  positionSelect.addEventListener('change', () => {
-    chrome.storage.sync.set({
-      toastPosition: positionSelect.value
-    }, showStatus);
+  positionBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const newPos = btn.dataset.value;
+      updateActivePosition(newPos);
+      chrome.storage.sync.set({
+        toastPosition: newPos
+      }, showStatus);
+    });
   });
 
   // Save Theme
