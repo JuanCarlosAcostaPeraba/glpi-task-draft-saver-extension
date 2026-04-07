@@ -4,6 +4,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const positionBtns = document.querySelectorAll('.pos-btn');
   const positionLabel = document.getElementById('position-label');
 
+  // Set extension version automatically
+  const versionElement = document.getElementById('app-version');
+  if (versionElement && chrome.runtime && chrome.runtime.getManifest) {
+    const manifest = chrome.runtime.getManifest();
+    versionElement.textContent = manifest.version;
+  }
+
   function showStatus() {
     status.style.display = 'block';
     setTimeout(() => {
