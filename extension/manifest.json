@@ -8,8 +8,12 @@
     "default_title": "Configuración de GLPI Draft Saver"
   },
   "permissions": [
-    "storage"
+    "storage",
+    "alarms"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "host_permissions": [
     "https://*.huc.es/front/ticket.form.php*",
     "https://10.137.96.244/front/ticket.form.php*"
