@@ -1,0 +1,12 @@
+{
+  "addons": {
+    "glpi-draft-saver@huc.es": {
+      "updates": [
+        {
+          "version": "2.1.2",
+          "update_link": "https://github.com/JuanCarlosAcostaPeraba/glpi-task-draft-saver-extension/releases/download/v2.1.2/glpi-draft-saver-pro-v2.1.2.xpi"
+        }
+      ]
+    }
+  }
+}
