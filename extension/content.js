@@ -556,9 +556,11 @@
     };
 
     toast.querySelector('.glpi-btn-dismiss').onclick = () => {
-        log(`User dismissed and deleted ${draftData.type} draft.`);
-        try { localStorage.removeItem(draftData.storageKey); } catch (e) {}
-        hideToast(toast);
+        if (confirm("¿Estás seguro de que deseas ignorar y eliminar este borrador?")) {
+            log(`User dismissed and deleted ${draftData.type} draft.`);
+            try { localStorage.removeItem(draftData.storageKey); } catch (e) {}
+            hideToast(toast);
+        }
     };
   }
 
