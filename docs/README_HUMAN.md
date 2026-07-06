@@ -63,13 +63,20 @@ En las extensiones de navegador, los scripts de contenido por defecto se ejecuta
 - **Sincronización de Configuración**: Para pasar la configuración de Tema y Posición desde `bridge.js` (Isolated) a `content.js` (Main), `bridge.js` escribe atributos personalizados en la etiqueta `<html>` del DOM (ej. `data-glpi-draft-saver-pos="top-right"`). `content.js` y `style.css` leen dinámicamente estos atributos para renderizar la interfaz en la posición y tema seleccionados.
 
 ### B. Ciclo de Autoguardado y Restauración
-1. **Detección**: `content.js` ejecuta un bucle de comprobación cada segundo (`POLLING_INTERVAL_MS`). Cuando detecta que los editores TinyMCE para Seguimientos, Tareas, Soluciones o Validaciones han cargado, les vincula escuchadores de eventos (`input`, `change`, `keyup`, `undo`, `redo`).
-2. **Guardado**: Al escribir más de 10 caracteres, el borrador se guarda automáticamente en el `localStorage` con la clave `glpi_draft_<tipo>_ticket_<id>`. Esto se hace usando un "debounce" de 1 segundo para evitar escrituras en disco excesivas y también de manera periódica cada 5 segundos como respaldo.
-3. **Limpieza**: Cuando se envía con éxito el formulario de GLPI, el borrador asociado se elimina de `localStorage` para evitar que vuelva a aparecer.
-4. **Restauración**: Si al abrir un ticket hay un borrador guardado en `localStorage`, la extensión muestra un banner en pantalla (toast) ofreciendo la restauración. Al pulsar "Restaurar":
-   - Copia una copia en texto plano al portapapeles (`navigator.clipboard`) por si falla algo en la inyección.
-   - Si el formulario está oculto, hace clic automáticamente en el botón correspondiente de GLPI para expandirlo.
-   - Aplica un retraso de 300ms antes de llamar a `setContent()` para asegurar que TinyMCE está renderizado y listo.
+1. **Detección Dinámica y Reactiva**: `content.js` realiza un escaneo inicial de los editores TinyMCE activos en la página (`window.tinymce.editors`). Además, para optimizar recursos y no mantener intervalos activos de forma indefinida, se añade un escuchador global a clics en la página que inicia una ventana de detección de 30 segundos cada vez que el usuario interactúa (por ejemplo, al pulsar el botón "Agregar" o al pulsar "Editar" en una tarea existente de la línea de tiempo).
+2. **Identificación de Contextos (Nuevo vs Edición)**: Para cada editor detectado, se inspecciona su formulario padre:
+   - Se determina el tipo de borrador mediante el campo `<input name="itemtype">` (puede ser `TicketTask` para Tareas, `ITILFollowup` para Seguimientos, `ITILSolution` para Soluciones o `TicketValidation` para Validaciones).
+   - Se comprueba si es un borrador de edición leyendo el campo oculto `<input name="id">`. Si el valor es mayor a 0 y distinto al ID del ticket, se reconoce como edición de un elemento existente.
+3. **Guardado Independiente**: Los borradores se guardan de forma independiente en `localStorage` con claves dinámicas diferenciando si es una creación nueva o una edición:
+   - Nuevo elemento: `glpi_draft_<tipo>_ticket_<ticketId>`
+   - Modificación: `glpi_draft_<tipo>_ticket_<ticketId>_edit_<id_elemento>`
+   Esto permite que un técnico pueda estar redactando una tarea nueva y modificando una tarea antigua al mismo tiempo sin que se sobrescriban los borradores.
+4. **Limpieza al Enviar**: Al enviar con éxito cualquiera de los formularios, el escuchador de envío (`submit`) elimina específicamente la clave de `localStorage` que pertenece a ese editor.
+5. **Restauración Inteligente en la Línea de Tiempo**: Si al cargar el ticket hay borradores guardados, la extensión muestra banners informativos. Al restaurar:
+   - Se copia la copia de seguridad al portapapeles.
+   - Si es un borrador de un nuevo elemento, pulsa el botón correspondiente del formulario para mostrar el bloque.
+   - Si es un borrador de una edición existente (posee un ID de elemento), el script busca en la línea de tiempo el botón "Editar" correspondiente a ese ID específico (`findEditButton`) y simula un clic para forzar la carga AJAX del formulario de edición.
+   - Una vez cargado el TinyMCE en la pantalla, inyecta el contenido con un retardo de 300ms. Si no se localiza el botón de edición, se advierte al usuario con un toast de que el texto ha sido copiado al portapapeles para que lo pegue manualmente al abrir la edición.
 
 ### C. Auto-Actualización para Técnicos (`background.js`)
 Si la extensión se despliega de manera no empaquetada (unpacked) en una carpeta de red compartida para que la usen varios técnicos:

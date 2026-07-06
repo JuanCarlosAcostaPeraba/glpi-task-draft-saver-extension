@@ -59,7 +59,7 @@
 
   // --- STATE ---
   let ticketId = null;
-  const activeEditors = new Map(); // type -> { textarea, editor, lastSavedContent, debounceTimer }
+  const activeEditors = new Map(); // storageKey -> { textarea, editor, lastSavedContent, debounceTimer, type, itemId, label, storageKey }
   let autosaveInterval = null;
   let toastContainer = null;
   let isPolling = false;
@@ -88,7 +88,6 @@
     if (!ticketId) return;
 
     if (isInitialized) {
-        // log('Plugin already active. Skipping initialization.');
         return;
     }
 
@@ -101,11 +100,108 @@
 
     // Start polling for general editor detection (autosave)
     startTinyMCEDetectionPolling();
+
+    // Reiniciar el bucle de polling ante interacciones para detectar editores dinámicos (AJAX)
+    document.addEventListener('click', () => {
+      startTinyMCEDetectionPolling(true);
+    });
   }
 
 
 
 
+
+  // --- EDITOR UTILITIES ---
+
+  /**
+   * Identifica el tipo y contexto de borrador (nuevo o edición) para un textarea de TinyMCE.
+   */
+  function getEditorConfig(textarea) {
+    const form = textarea.closest('form');
+    if (!form) return null;
+
+    const action = (form.getAttribute('action') || '').toLowerCase();
+    const itemtypeInput = form.querySelector('input[name="itemtype"]');
+    const itemtype = itemtypeInput ? itemtypeInput.value : '';
+
+    let type = null;
+    let itemId = null;
+
+    // 1. Identificar el tipo de borrador (seguimiento, tarea, solución, validación)
+    if (itemtype === 'TicketTask' || action.includes('tickettask') || textarea.closest('#new-TicketTask-block')) {
+      type = 'task';
+    } else if (itemtype === 'ITILFollowup' || action.includes('itilfollowup') || textarea.closest('#new-ITILFollowup-block')) {
+      type = 'followup';
+    } else if (itemtype === 'ITILSolution' || action.includes('itilsolution') || textarea.closest('#new-ITILSolution-block')) {
+      type = 'solution';
+    } else if (itemtype === 'TicketValidation' || action.includes('ticketvalidation') || textarea.closest('#new-TicketValidation-block')) {
+      type = 'validation';
+    }
+
+    if (!type) return null;
+
+    // 2. Comprobar si es un formulario de edición (posee un input 'id' numérico válido que no es el ticketId)
+    const idInput = form.querySelector('input[name="id"]');
+    if (idInput) {
+      const val = idInput.value;
+      if (val && /^\d+$/.test(val) && val !== '0' && val !== ticketId) {
+        itemId = val;
+      }
+    }
+
+    const baseKey = DRAFT_TYPES[type].storageKey + ticketId;
+    const storageKey = itemId ? `${baseKey}_edit_${itemId}` : baseKey;
+
+    return {
+      type: type,
+      itemId: itemId,
+      storageKey: storageKey,
+      label: DRAFT_TYPES[type].label + (itemId ? ` (Edición #${itemId})` : '')
+    };
+  }
+
+  /**
+   * Intenta localizar el botón de "Editar" para un elemento de la línea de tiempo de GLPI.
+   */
+  function findEditButton(type, itemId) {
+    const selectors = [
+      `[data-id="${itemId}"]`,
+      `a[href*="id=${itemId}"]`,
+      `a[href*="update=1"][href*="id=${itemId}"]`,
+      `[href*="task"][href*="${itemId}"]`,
+      `[href*="followup"][href*="${itemId}"]`,
+      `[href*="solution"][href*="${itemId}"]`,
+      `[href*="validation"][href*="${itemId}"]`
+    ];
+    
+    for (const selector of selectors) {
+      const elements = document.querySelectorAll(selector);
+      for (const el of elements) {
+        const text = (el.textContent || el.title || '').toLowerCase();
+        const isEdit = text.includes('edit') || text.includes('modificar') || text.includes('actualizar') || 
+                       el.classList.contains('edit') || el.classList.contains('edit_button') ||
+                       el.querySelector('.ti-pencil') || el.querySelector('.fa-pencil') || 
+                       el.querySelector('.fa-edit') || el.querySelector('.ti-edit');
+        if (isEdit || el.tagName === 'A' || el.tagName === 'BUTTON') {
+          return el;
+        }
+      }
+    }
+    
+    // Búsqueda genérica por ID
+    const allLinks = document.querySelectorAll('a, button');
+    for (const el of allLinks) {
+      const href = el.getAttribute('href') || '';
+      const onclick = el.getAttribute('onclick') || '';
+      const dataTarget = el.getAttribute('data-bs-target') || '';
+      
+      if (href.includes(itemId) || onclick.includes(itemId) || dataTarget.includes(itemId)) {
+        return el;
+      }
+    }
+    
+    return null;
+  }
 
   // --- EDITOR DETECTION ---
 
@@ -125,44 +221,53 @@
     const poll = setInterval(() => {
       window.__draft_saver_poll_interval = poll;
 
+      // 1. Limpieza de editores que ya no están en el DOM o se han destruido
+      for (const [key, data] of activeEditors.entries()) {
+        if (data.editor.removed || !data.textarea || !data.textarea.isConnected) {
+          log(`Cleaning up removed editor: ${key}`);
+          clearTimeout(data.debounceTimer);
+          activeEditors.delete(key);
+        }
+      }
+
+      // 2. Detección de nuevos editores activos en la página
       let foundAnyNew = false;
+      const tinymce = window.tinymce;
+      if (tinymce && typeof tinymce.get === 'function') {
+        const editors = tinymce.editors || [];
+        for (let i = 0; i < editors.length; i++) {
+          const editor = editors[i];
+          if (!editor || editor.removed || typeof editor.getContent !== 'function' || typeof editor.save !== 'function') {
+            continue;
+          }
 
-      for (const [type, config] of Object.entries(DRAFT_TYPES)) {
-        if (activeEditors.has(type)) continue;
+          const textarea = editor.getElement();
+          if (!textarea || !textarea.id) continue;
 
-        const block = document.querySelector(config.blockSelector);
-        if (!block) continue;
+          const config = getEditorConfig(textarea);
+          if (!config) continue;
 
-        const textarea = block.querySelector('textarea');
-        if (!textarea || !textarea.id) continue;
-
-        const tinymce = window.tinymce;
-        if (tinymce && typeof tinymce.get === 'function') {
-          const editor = tinymce.get(textarea.id);
-
-          // Check readiness (must have standard methods)
-          if (editor && typeof editor.getContent === 'function' && typeof editor.save === 'function') {
+          if (!activeEditors.has(config.storageKey)) {
             log(`Success: Found ${config.label} editor [${textarea.id}].`);
             
             const editorData = {
-                textarea: textarea,
-                editor: editor,
-                lastSavedContent: '',
-                debounceTimer: null
+              textarea: textarea,
+              editor: editor,
+              lastSavedContent: '',
+              debounceTimer: null,
+              type: config.type,
+              itemId: config.itemId,
+              storageKey: config.storageKey,
+              label: config.label
             };
-            activeEditors.set(type, editorData);
-            attachListeners(type);
+            activeEditors.set(config.storageKey, editorData);
+            attachListeners(config.storageKey);
             foundAnyNew = true;
           }
         }
       }
 
       if (foundAnyNew) {
-        if (activeEditors.size === Object.keys(DRAFT_TYPES).length) {
-            log('All potential editors found.');
-            clearInterval(poll);
-            isPolling = false;
-        }
         startPeriodicBackup();
       }
 
@@ -197,11 +302,9 @@
     }
   }
 
-  function saveDraft(type) {
-    const data = activeEditors.get(type);
+  function saveDraft(storageKey) {
+    const data = activeEditors.get(storageKey);
     if (!ticketId || !data || !data.editor) return;
-
-    const config = DRAFT_TYPES[type];
 
     try {
       data.editor.save();
@@ -212,49 +315,59 @@
         if (currentHtml !== data.lastSavedContent) {
           const draftData = {
             ticketId: ticketId,
-            type: type,
+            type: data.type,
+            itemId: data.itemId,
             content: currentHtml,
             savedAt: new Date().toISOString()
           };
           
-          localStorage.setItem(config.storageKey + ticketId, JSON.stringify(draftData));
+          localStorage.setItem(storageKey, JSON.stringify(draftData));
           data.lastSavedContent = currentHtml;
-          showStatusToast(`Borrador de ${config.label} guardado`);
+          showStatusToast(`Borrador de ${data.label} guardado`);
         }
       }
     } catch (e) {
-      console.error(`[GLPI Draft Saver] Error during save (${type}):`, e);
+      console.error(`[GLPI Draft Saver] Error during save (${storageKey}):`, e);
     }
   }
 
   function checkForAvailableDrafts() {
     try {
-      for (const [type, config] of Object.entries(DRAFT_TYPES)) {
-        let rawData = localStorage.getItem(config.storageKey + ticketId);
-        
-        // Legacy support for tasks
-        if (!rawData && type === 'task') {
-            rawData = localStorage.getItem(LEGACY_STORAGE_KEY_PREFIX + ticketId);
-            if (rawData) {
-                log('Found legacy task draft. Migrating...');
-                localStorage.setItem(config.storageKey + ticketId, rawData);
-                localStorage.removeItem(LEGACY_STORAGE_KEY_PREFIX + ticketId);
+      // 1. Soporte para borrador heredado (legacy)
+      const legacyKey = LEGACY_STORAGE_KEY_PREFIX + ticketId;
+      const legacyDataRaw = localStorage.getItem(legacyKey);
+      if (legacyDataRaw) {
+        log('Found legacy task draft. Migrating...');
+        const newKey = DRAFT_TYPES.task.storageKey + ticketId;
+        localStorage.setItem(newKey, legacyDataRaw);
+        localStorage.removeItem(legacyKey);
+      }
+
+      // 2. Escanear las claves de localStorage que empiecen con los prefijos configurados
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+
+        for (const [type, config] of Object.entries(DRAFT_TYPES)) {
+          if (key.startsWith(config.storageKey + ticketId)) {
+            const rawData = localStorage.getItem(key);
+            if (!rawData) continue;
+
+            const draftData = JSON.parse(rawData);
+            draftData.type = draftData.type || type;
+            draftData.storageKey = key;
+
+            // Omitir si ya tiene contenido en pantalla
+            const existingEditor = activeEditors.get(key);
+            if (existingEditor) {
+              const plainText = htmlToPlainText(existingEditor.editor.getContent());
+              if (plainText !== '') continue;
             }
+
+            log(`Found draft for key ${key} from ${draftData.savedAt}. Showing prompt.`);
+            showRestorePrompt(draftData);
+          }
         }
-
-        if (!rawData) continue;
-
-        const draftData = JSON.parse(rawData);
-        
-        // If editor exists and has content, skip prompt
-        const existingEditor = activeEditors.get(type);
-        if (existingEditor) {
-            const plainText = htmlToPlainText(existingEditor.editor.getContent());
-            if (plainText !== '') continue;
-        }
-
-        log(`Found ${type} draft from ${draftData.savedAt}. Showing prompt.`);
-        showRestorePrompt(draftData);
       }
     } catch (e) { log('Draft check error:', e); }
   }
@@ -264,33 +377,44 @@
    * Ensures the correct form block is visible by clicking the button, then restores content.
    */
   function handleRestoreAction(draftData) {
-    const config = DRAFT_TYPES[draftData.type];
-    const btn = document.querySelector(config.buttonSelector);
-    
-    // 1. Copy to clipboard immediately as a safety measure
+    // 1. Copiar al portapapeles por seguridad
     copyToClipboard(draftData.content).then(success => {
         if (success) {
             log('Backup copy to clipboard successful.');
         }
     });
 
-    // 2. Try to show form
-    if (btn) {
-        log(`Clicking ${draftData.type} button for visibility.`);
-        btn.click();
+    // 2. Intentar mostrar el formulario
+    if (draftData.itemId) {
+      // Si es edición de un elemento existente, buscar el botón en la línea de tiempo
+      const editBtn = findEditButton(draftData.type, draftData.itemId);
+      if (editBtn) {
+        log(`Clicking edit button for item ${draftData.itemId}.`);
+        editBtn.click();
+      } else {
+        log(`Could not find edit button for item ${draftData.itemId}.`);
+      }
+    } else {
+      // Si es un borrador de nuevo elemento
+      const config = DRAFT_TYPES[draftData.type];
+      const btn = document.querySelector(config.buttonSelector);
+      if (btn) {
+          log(`Clicking ${draftData.type} button for visibility.`);
+          btn.click();
+      }
     }
 
-    // 3. Start polling
+    // 3. Forzar el polling para detectar el editor inmediatamente al cargarse
     startTinyMCEDetectionPolling(true);
 
     let attempts = 0;
-    const maxAttempts = 6; // 3 seconds total (6 * 500ms)
+    const maxAttempts = 8; // 4 segundos total (8 * 500ms)
     
     log(`Attempting to restore ${draftData.type} editor...`);
     
     const waitInterval = setInterval(() => {
         attempts++;
-        const editorData = activeEditors.get(draftData.type);
+        const editorData = activeEditors.get(draftData.storageKey);
         
         if (editorData && editorData.editor) {
             const isReady = typeof editorData.editor.getContent === 'function' && 
@@ -306,25 +430,21 @@
         if (attempts >= maxAttempts) {
             clearInterval(waitInterval);
             log(`Could not restore automatically after ${attempts} attempts.`);
-            showStatusToast(`Error de GISE, mensaje copiado al portapapeles`, 15000, 'warning-toast');
+            showStatusToast(`Borrador copiado al portapapeles. Abre la edición para restaurar.`, 10000, 'warning-toast');
         }
     }, 500);
   }
 
-
-
   async function performRestore(draftData) {
-    const data = activeEditors.get(draftData.type);
+    const data = activeEditors.get(draftData.storageKey);
     if (!data || !data.editor) return;
     
-    log(`Performing restoration for ${draftData.type}...`);
+    log(`Performing restoration for ${draftData.type} (${draftData.storageKey})...`);
     try {
         const doRestore = () => {
-            // Safety checks for TinyMCE internal state
             if (data.editor.removed) return;
             if (typeof data.editor.setContent !== 'function') return;
 
-            // Ensure editor is focused/active to avoid some internal plugin errors
             if (typeof data.editor.focus === 'function') {
                 data.editor.focus();
             }
@@ -339,13 +459,10 @@
             }
         };
 
-        // Delay execution by 300ms to allow TinyMCE internal plugins (like resize) 
-        // to finish initializing after the block visibility changed.
         setTimeout(() => {
             try {
                 doRestore();
                 
-                // Verification and potential retry
                 setTimeout(() => {
                     const currentContent = data.editor.getContent();
                     if (currentContent.length < 5 && draftData.content.length > 10) {
@@ -353,7 +470,7 @@
                         doRestore();
                     }
                     
-                    showStatusToast(`Borrador de ${DRAFT_TYPES[draftData.type].label} restaurado`);
+                    showStatusToast(`Borrador de ${data.label} restaurado`);
                 }, 150);
             } catch (innerError) {
                 log('Inner restoration error:', innerError);
@@ -425,7 +542,7 @@
 
     toast.querySelector('.glpi-btn-dismiss').onclick = () => {
         log(`User dismissed and deleted ${draftData.type} draft.`);
-        try { localStorage.removeItem(config.storageKey + ticketId); } catch (e) {}
+        try { localStorage.removeItem(draftData.storageKey); } catch (e) {}
         hideToast(toast);
     };
   }
@@ -453,8 +570,8 @@
 
   // --- LISTENERS & BACKUP ---
 
-  function attachListeners(type) {
-    const data = activeEditors.get(type);
+  function attachListeners(storageKey) {
+    const data = activeEditors.get(storageKey);
     if (!data || !data.editor) return;
 
     const events = ['input', 'change', 'keyup', 'undo', 'redo'];
@@ -462,7 +579,7 @@
       data.editor.off(eventType);
       data.editor.on(eventType, () => {
         clearTimeout(data.debounceTimer);
-        data.debounceTimer = setTimeout(() => saveDraft(type), DEBOUNCE_DELAY_MS);
+        data.debounceTimer = setTimeout(() => saveDraft(storageKey), DEBOUNCE_DELAY_MS);
       });
     });
 
@@ -470,11 +587,11 @@
       const parentForm = data.textarea.closest('form');
       if (parentForm) {
         parentForm.addEventListener('submit', () => {
-          log(`Form for ${type} submitted. Cleaning up draft.`);
+          log(`Form for ${data.label} submitted. Cleaning up draft.`);
           try {
-            localStorage.removeItem(DRAFT_TYPES[type].storageKey + ticketId);
+            localStorage.removeItem(storageKey);
           } catch (e) {
-            log(`Error cleaning up ${type} draft on submit:`, e);
+            log(`Error cleaning up draft ${storageKey} on submit:`, e);
           }
         });
       }
@@ -484,8 +601,8 @@
   function startPeriodicBackup() {
     if (autosaveInterval) clearInterval(autosaveInterval);
     autosaveInterval = setInterval(() => {
-        for (const type of activeEditors.keys()) {
-            saveDraft(type);
+        for (const storageKey of activeEditors.keys()) {
+            saveDraft(storageKey);
         }
     }, AUTOSAVE_INTERVAL_MS);
   }

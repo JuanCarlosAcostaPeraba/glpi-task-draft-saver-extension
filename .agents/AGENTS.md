@@ -6,7 +6,8 @@ Este archivo contiene reglas y directrices específicas del espacio de trabajo p
 
 Este proyecto utiliza `codebase-memory-mcp` para mantener un grafo de conocimiento de la estructura y llamadas del código.
 
-### Prioridad de Herramientas para Descubrimiento de Código:
+### Prioridad de Herramientas para Descubrimiento de Código
+
 1. `search_graph`: Buscar funciones, clases, rutas o variables por patrón.
 2. `trace_path`: Rastrear qué funciones llaman a un símbolo o cuáles son llamadas por él.
 3. `get_code_snippet`: Leer el código fuente de funciones o clases específicas.

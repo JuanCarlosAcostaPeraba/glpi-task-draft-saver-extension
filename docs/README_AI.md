@@ -49,14 +49,23 @@ sequenceDiagram
 
 Los formularios de GLPI se renderizan dinámicamente y las instancias del editor de TinyMCE no están disponibles de forma inmediata al dispararse `DOMContentLoaded`. Por tanto, se aplican los siguientes patrones:
 
-1. **Detección Dinámica (Polling)**:
-   Se ejecuta un intervalo cada `1000ms` ([content.js:112-175](file:///c:/Users/japeraba/dev/glpi-task-draft-saver-extension/extension/content.js#L112-L175)) para verificar si los editores ITIL (seguimiento, tarea, solución, validación) se han inyectado en el DOM y si tienen instancias válidas de `tinymce`.
+1. **Detección Dinámica y Reactiva**:
+   Se ejecuta un escaneo inicial de los editores TinyMCE activos en la página (`window.tinymce.editors`). Para evitar el consumo constante de recursos, se añade un escuchador global a clics en la página que inicia una ventana de polling de 30 segundos cada vez que el usuario interactúa (por ejemplo, al pulsar el botón de crear nueva tarea o de editar una existente).
 
-2. **Acciones de Restauración Segura**:
+2. **Identificación de Contexto y Claves Dinámicas**:
+   Cada editor es clasificado analizando su formulario padre mediante la función `getEditorConfig(textarea)`:
+   - Tipo de borrador: Se define mediante el campo `<input name="itemtype">` (`TicketTask` -> `task`, `ITILFollowup` -> `followup`, etc.).
+   - Modo de edición: Se define mediante el campo `<input name="id">`. Si el valor es mayor a 0 y distinto al ID del ticket de la página, se identifica como edición de un elemento existente.
+   - Las claves de persistencia en `localStorage` se mapean de la siguiente manera:
+     - Nuevo elemento: `glpi_draft_<tipo>_ticket_<ticketId>`
+     - Edición de elemento existente: `glpi_draft_<tipo>_ticket_<ticketId>_edit_<id_elemento>`
+
+3. **Acciones de Restauración Segura**:
    Cuando el usuario decide restaurar un borrador:
-   - **Copia de seguridad instantánea**: Como salvaguarda para evitar pérdida de datos si falla la inyección, el borrador en HTML se convierte a texto plano y se copia automáticamente al portapapeles (`navigator.clipboard.writeText`) ([content.js:271-275](file:///c:/Users/japeraba/dev/glpi-task-draft-saver-extension/extension/content.js#L271-L275)).
-   - **Forzar Visibilidad del Bloque**: Se simula un click en el botón correspondiente del formulario (`buttonSelector`) para expandir el acordeón o bloque donde reside el editor.
-   - **Retraso de Escritura**: La inyección del contenido (`setContent`) se retrasa **300ms** ([content.js:344-362](file:///c:/Users/japeraba/dev/glpi-task-draft-saver-extension/extension/content.js#L344-L362)) mediante `setTimeout` para asegurar que el editor ha finalizado su redibujo interno tras expandirse el bloque de visualización.
+   - **Copia de seguridad instantánea**: Copia el texto HTML limpio al portapapeles (`navigator.clipboard.writeText`).
+   - **Forzar Carga del Editor**: Si es un nuevo elemento, hace clic en el botón de visibilidad correspondiente. Si es un borrador de edición, busca el botón "Editar" específico de ese ID en la línea de tiempo mediante `findEditButton(type, itemId)` y simula un clic para forzar su renderizado vía AJAX.
+   - **Retraso de Escritura**: La inyección del contenido (`setContent`) se retrasa **300ms** después de la visibilidad para permitir la correcta inicialización de TinyMCE. Si no se puede inyectar automáticamente después de 8 intentos, se muestra un toast informando de que el borrador fue copiado al portapapeles.
+   - **Limpieza**: El evento de submit del formulario limpia específicamente la clave de `localStorage` del editor enviado.
 
 ---
 
