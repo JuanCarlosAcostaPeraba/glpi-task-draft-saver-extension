@@ -53,7 +53,10 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "glpi-draft-saver@huc.es",
-      "update_url": "https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/glpi-task-draft-saver-extension/main/firefox-updates.json"
+      "update_url": "https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/glpi-task-draft-saver-extension/main/firefox-updates.json",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   }
 }
