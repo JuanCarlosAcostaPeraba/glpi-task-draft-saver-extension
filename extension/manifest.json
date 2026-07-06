@@ -12,7 +12,8 @@
     "alarms"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
   },
   "host_permissions": [
     "https://*.huc.es/front/ticket.form.php*",
