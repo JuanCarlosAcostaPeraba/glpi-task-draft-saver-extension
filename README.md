@@ -2,6 +2,20 @@
 
 A professional browser extension that automatically saves drafts for **Tasks, Follow-ups, Solutions, and Validations** in GLPI to prevent data loss.
 
+---
+
+## 📚 Documentación del Proyecto / Project Documentation
+
+Para facilitar el desarrollo, mantenimiento y puesta en marcha del proyecto, la documentación se ha dividido en dos guías específicas:
+
+1. **Para Desarrolladores Humanos 🧑‍💻**:
+   - Consulta el [Manual del Desarrollador (Humano)](file:///c:/Users/japeraba/dev/glpi-task-draft-saver-extension/docs/README_HUMAN.md) para saber cómo funciona la arquitectura de la extensión, configurar el entorno de pruebas local, generar iconos y empaquetar una nueva release.
+2. **Para Asistentes de IA y Agentes Autónomos 🤖**:
+   - Consulta la [Guía de Desarrollo para AIs y Agentes](file:///c:/Users/japeraba/dev/glpi-task-draft-saver-extension/docs/README_AI.md) para obtener una explicación detallada del flujo de datos, restricciones del ciclo de vida de TinyMCE, sincronización DOM e instrucciones de integración con `codebase-memory-mcp`.
+   - Las reglas y directrices automatizadas para agentes también están declaradas en [.agents/AGENTS.md](file:///c:/Users/japeraba/dev/glpi-task-draft-saver-extension/.agents/AGENTS.md) para su carga automática por copilotos compatibles.
+
+---
+
 ## Features
 
 - **Multi-Editor Autosave**: Independently saves drafts for tasks, follow-ups, solutions, and validations.
@@ -11,31 +25,16 @@ A professional browser extension that automatically saves drafts for **Tasks, Fo
 - **Legacy Support**: Automatically migrates old task drafts to the new multi-editor system.
 - **Secure & Private**: All data is stored locally in your browser's `localStorage`.
 
-## Instalación para Técnicos
+## Quick Start (Instalación Rápida)
 
 ### Google Chrome / Microsoft Edge / Brave
-
-La forma más sencilla de instalar la extensión es usar el archivo `.zip`:
-
-1. Descarga el archivo `glpi-draft-saver-pro-v2.0.0.zip`.
+1. Descarga el archivo `.zip` de la última versión.
 2. Extrae el contenido en una carpeta en tu ordenador (ej. `C:\Extensiones\GLPI-Draft-Saver`).
-3. Abre tu navegador y ve a la página de extensiones:
-   - Chrome/Brave: `chrome://extensions/`
-   - Edge: `edge://extensions/`
-4. Activa el **Modo de desarrollador** (arriba a la derecha en Chrome, abajo a la izquierda en Edge).
-5. Haz clic en el botón **Cargar descomprimida** (o "Cargar elemento sin empaquetar").
-6. Selecciona la carpeta donde extrajiste los archivos.
+3. Ve a `chrome://extensions/` en tu navegador.
+4. Activa el **Modo de desarrollador** (arriba a la derecha).
+5. Haz clic en **Cargar descomprimida** y selecciona la carpeta extraída (la que contiene `manifest.json`).
 
-### Mozilla Firefox
-
-Firefox requiere que las extensiones estén firmadas por Mozilla para ser instaladas de forma permanente. Si el departamento de IT ha proporcionado el archivo `.xpi` (versión firmada No Listada en AMO):
-
-1. Asegúrate de tener el archivo descargado (ej. `glpi-draft-saver-pro.xpi`).
-2. Abre Firefox y entra en `about:addons`.
-3. Arrastra el archivo `.xpi` hacia la ventana del navegador.
-4. Confirma la instalación cuando Firefox te pregunte.
-
-*(Si solo tienes el código fuente o el `.zip` y quieres probarla temporalmente, ve a `about:debugging` > Este Firefox > Cargar complemento temporal y selecciona el archivo `manifest.json`).*
+*Para más detalles sobre la instalación en Firefox o la configuración del auto-actualizador de red, consulta el [Manual del Desarrollador (Humano)](file:///c:/Users/japeraba/dev/glpi-task-draft-saver-extension/docs/README_HUMAN.md).*
 
 ## Technical Details
 
@@ -43,3 +42,4 @@ Firefox requiere que las extensiones estén firmadas por Mozilla para ser instal
 - **Storage Strategy**: Uses `localStorage` with the key format `glpi_draft_<type>_ticket_<id>`.
 - **Editor Detection**: Detects standard `textarea` and TinyMCE fields inside ITIL blocks.
 - **Minimum Save Length**: Only saves if content is longer than 10 characters.
+
