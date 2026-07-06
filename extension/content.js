@@ -511,29 +511,44 @@
 
     const config = DRAFT_TYPES[draftData.type];
     const savedDate = new Date(draftData.savedAt).toLocaleString();
+    const isEdit = !!draftData.itemId;
     
     const toast = document.createElement('div');
     toast.id = toastId;
     toast.className = 'glpi-draft-saver-toast restore-prompt';
-    toast.innerHTML = `
-      <div><strong>Borrador de ${config.label}</strong></div>
-      <div style="font-size: 11px; opacity: 0.8;">Guardado: ${savedDate}</div>
-      <div class="toast-actions">
-        <button class="glpi-btn-restore">Restaurar</button>
-        <button class="glpi-btn-copy secondary">Copiar</button>
-        <button class="glpi-btn-dismiss secondary">Ignorar</button>
-      </div>
-    `;
+    
+    if (isEdit) {
+      toast.innerHTML = `
+        <div><strong>Borrador de Edición de ${config.label}</strong></div>
+        <div style="font-size: 11px; opacity: 0.8;">Guardado: ${savedDate}</div>
+        <div class="toast-actions">
+          <button class="glpi-btn-copy">Copiar</button>
+          <button class="glpi-btn-dismiss secondary">Ignorar</button>
+        </div>
+      `;
+    } else {
+      toast.innerHTML = `
+        <div><strong>Borrador de ${config.label}</strong></div>
+        <div style="font-size: 11px; opacity: 0.8;">Guardado: ${savedDate}</div>
+        <div class="toast-actions">
+          <button class="glpi-btn-restore">Restaurar</button>
+          <button class="glpi-btn-copy secondary">Copiar</button>
+          <button class="glpi-btn-dismiss secondary">Ignorar</button>
+        </div>
+      `;
+    }
 
     toastContainer.appendChild(toast);
     
     // Trigger animation
     setTimeout(() => toast.classList.add('show'), 10);
 
-    toast.querySelector('.glpi-btn-restore').onclick = () => {
-        handleRestoreAction(draftData);
-        hideToast(toast);
-    };
+    if (!isEdit) {
+      toast.querySelector('.glpi-btn-restore').onclick = () => {
+          handleRestoreAction(draftData);
+          hideToast(toast);
+      };
+    }
 
     toast.querySelector('.glpi-btn-copy').onclick = async () => {
         await copyToClipboard(draftData.content);
