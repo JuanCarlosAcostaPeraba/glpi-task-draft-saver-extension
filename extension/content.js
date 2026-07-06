@@ -234,7 +234,7 @@
       let foundAnyNew = false;
       const tinymce = window.tinymce;
       if (tinymce && typeof tinymce.get === 'function') {
-        const editors = Object.values(tinymce.editors || {});
+        const editors = typeof tinymce.get === 'function' ? tinymce.get() : [];
         for (let i = 0; i < editors.length; i++) {
           const editor = editors[i];
           if (!editor || editor.removed || typeof editor.getContent !== 'function' || typeof editor.save !== 'function') {
