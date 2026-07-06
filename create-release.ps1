@@ -22,9 +22,28 @@ Copy-Item -Recurse "extension\*" $tempDir
 Get-ChildItem -Path $tempDir -Recurse -Filter ".DS_Store" | Remove-Item -Force
 Get-ChildItem -Path $tempDir -Recurse -Filter "*.map" | Remove-Item -Force
 
-# Create ZIP
+# Create ZIP with forward-slash paths (required for Firefox AMO compatibility)
+Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $outputFile)
+
+$zipStream = [System.IO.File]::Open($outputFile, [System.IO.FileMode]::Create)
+$zipArchive = New-Object System.IO.Compression.ZipArchive($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
+
+Get-ChildItem -Path $tempDir -Recurse | Where-Object { -not $_.PSIsContainer } | ForEach-Object {
+    $relativePath = $_.FullName.Substring($tempDir.Length + 1)
+    # Force forward slash for zip entry path
+    $entryName = $relativePath.Replace('\', '/')
+    
+    $entry = $zipArchive.CreateEntry($entryName)
+    $entryStream = $entry.Open()
+    $fileStream = [System.IO.File]::OpenRead($_.FullName)
+    $fileStream.CopyTo($entryStream)
+    $fileStream.Close()
+    $entryStream.Close()
+}
+
+$zipArchive.Dispose()
+$zipStream.Close()
 
 # Clean up
 Remove-Item -Recurse -Force $tempDir
