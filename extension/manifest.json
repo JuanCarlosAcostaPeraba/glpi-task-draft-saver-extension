@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GLPI Draft Saver Pro",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Automatically saves drafts for tasks, follow-ups, solutions, and validations in GLPI.",
   "action": {
     "default_popup": "popup.html",
