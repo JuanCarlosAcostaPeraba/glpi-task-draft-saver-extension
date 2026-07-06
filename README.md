@@ -43,3 +43,13 @@ Para facilitar el desarrollo, mantenimiento y puesta en marcha del proyecto, la 
 - **Editor Detection**: Detects standard `textarea` and TinyMCE fields inside ITIL blocks.
 - **Minimum Save Length**: Only saves if content is longer than 10 characters.
 
+## Privacy
+
+GLPI Draft Saver Pro **does not collect, transmit, or share any personal data**. All draft content is stored exclusively in your browser's `localStorage` and never leaves your device. User preferences (toast position and theme) are saved in `chrome.storage.sync` solely to synchronize your settings across your own devices.
+
+- **No analytics or tracking** of any kind.
+- **No external network requests**. The extension works entirely offline.
+- **No access to personal information**, authentication credentials, browsing history, or any data beyond the GLPI ticket page content you are actively editing.
+- **No remote code execution**. All JavaScript and CSS is bundled within the extension package.
+
+Your data stays on your machine. Period.
