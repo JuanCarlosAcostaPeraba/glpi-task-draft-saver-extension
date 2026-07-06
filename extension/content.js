@@ -118,34 +118,34 @@
    */
   function getEditorConfig(textarea) {
     const form = textarea.closest('form');
-    if (!form) return null;
-
-    const action = (form.getAttribute('action') || '').toLowerCase();
-    const itemtypeInput = form.querySelector('input[name="itemtype"]');
+    const action = form ? (form.getAttribute('action') || '').toLowerCase() : '';
+    const itemtypeInput = form ? form.querySelector('input[name="itemtype"]') : null;
     const itemtype = itemtypeInput ? itemtypeInput.value : '';
 
     let type = null;
     let itemId = null;
 
     // 1. Identificar el tipo de borrador (seguimiento, tarea, solución, validación)
-    if (itemtype === 'TicketTask' || action.includes('tickettask') || textarea.closest('#new-TicketTask-block')) {
+    if (itemtype === 'TicketTask' || action.includes('tickettask') || textarea.closest('#new-TicketTask-block') || textarea.id.includes('TicketTask') || (textarea.name && textarea.name.includes('TicketTask'))) {
       type = 'task';
-    } else if (itemtype === 'ITILFollowup' || action.includes('itilfollowup') || textarea.closest('#new-ITILFollowup-block')) {
+    } else if (itemtype === 'ITILFollowup' || action.includes('itilfollowup') || textarea.closest('#new-ITILFollowup-block') || textarea.id.includes('ITILFollowup') || (textarea.name && textarea.name.includes('ITILFollowup'))) {
       type = 'followup';
-    } else if (itemtype === 'ITILSolution' || action.includes('itilsolution') || textarea.closest('#new-ITILSolution-block')) {
+    } else if (itemtype === 'ITILSolution' || action.includes('itilsolution') || textarea.closest('#new-ITILSolution-block') || textarea.id.includes('ITILSolution') || (textarea.name && textarea.name.includes('ITILSolution'))) {
       type = 'solution';
-    } else if (itemtype === 'TicketValidation' || action.includes('ticketvalidation') || textarea.closest('#new-TicketValidation-block')) {
+    } else if (itemtype === 'TicketValidation' || action.includes('ticketvalidation') || textarea.closest('#new-TicketValidation-block') || textarea.id.includes('TicketValidation') || (textarea.name && textarea.name.includes('TicketValidation'))) {
       type = 'validation';
     }
 
     if (!type) return null;
 
     // 2. Comprobar si es un formulario de edición (posee un input 'id' numérico válido que no es el ticketId)
-    const idInput = form.querySelector('input[name="id"]');
-    if (idInput) {
-      const val = idInput.value;
-      if (val && /^\d+$/.test(val) && val !== '0' && val !== ticketId) {
-        itemId = val;
+    if (form) {
+      const idInput = form.querySelector('input[name="id"]');
+      if (idInput) {
+        const val = idInput.value;
+        if (val && /^\d+$/.test(val) && val !== '0' && val !== ticketId) {
+          itemId = val;
+        }
       }
     }
 
@@ -223,7 +223,7 @@
 
       // 1. Limpieza de editores que ya no están en el DOM o se han destruido
       for (const [key, data] of activeEditors.entries()) {
-        if (data.editor.removed || !data.textarea || !data.textarea.isConnected) {
+        if (data.editor.removed || !data.textarea || !document.body.contains(data.textarea)) {
           log(`Cleaning up removed editor: ${key}`);
           clearTimeout(data.debounceTimer);
           activeEditors.delete(key);
@@ -234,7 +234,7 @@
       let foundAnyNew = false;
       const tinymce = window.tinymce;
       if (tinymce && typeof tinymce.get === 'function') {
-        const editors = tinymce.editors || [];
+        const editors = Object.values(tinymce.editors || {});
         for (let i = 0; i < editors.length; i++) {
           const editor = editors[i];
           if (!editor || editor.removed || typeof editor.getContent !== 'function' || typeof editor.save !== 'function') {
