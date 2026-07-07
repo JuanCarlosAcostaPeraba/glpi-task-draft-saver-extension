@@ -28,13 +28,22 @@ Para facilitar el desarrollo, mantenimiento y puesta en marcha del proyecto, la 
 ## Quick Start (Instalación Rápida)
 
 ### Google Chrome / Microsoft Edge / Brave
-1. Descarga el archivo `.zip` de la última versión.
-2. Extrae el contenido en una carpeta en tu ordenador (ej. `C:\Extensiones\GLPI-Draft-Saver`).
-3. Ve a `chrome://extensions/` en tu navegador.
+1. Descarga el archivo de la release de Chrome (`glpi-draft-saver-pro-chrome-v*.zip`).
+2. Extrae el contenido en una carpeta local (ej. `C:\Extensiones\GLPI-Draft-Saver-Chrome`).
+3. Abre Chrome y ve a `chrome://extensions/`.
 4. Activa el **Modo de desarrollador** (arriba a la derecha).
-5. Haz clic en **Cargar descomprimida** y selecciona la carpeta extraída (la que contiene `manifest.json`).
+5. Haz clic en **Cargar descomprimida** y selecciona el directorio extraído.
 
-*Para más detalles sobre la instalación en Firefox o la configuración del auto-actualizador de red, consulta el [Manual del Desarrollador (Humano)](file:///c:/Users/japeraba/dev/glpi-task-draft-saver-extension/docs/README_HUMAN.md).*
+Para desarrollo en caliente, carga la carpeta `chrome/` directamente desde este repositorio.
+
+### Mozilla Firefox
+1. Descarga el archivo de la release de Firefox (`glpi-draft-saver-pro-firefox-v*.zip` para desarrollo o el `.xpi` firmado para producción).
+2. Para cargarlo temporalmente en desarrollo:
+   - Ve a `about:debugging` → **Este Firefox** → **Cargar complemento temporal...** y selecciona el archivo `manifest.json` dentro de la carpeta `firefox/` de este repositorio.
+3. Para instalación permanente:
+   - Instala el archivo `.xpi` firmado arrastrándolo directamente sobre Firefox o desde `about:addons` → ⚙️ → **Instalar complemento desde archivo...**
+
+*Para más detalles sobre la arquitectura de la extensión o la configuración del auto-actualizador, consulta el [Manual del Desarrollador (Humano)](file:///c:/Users/japeraba/dev/glpi-task-draft-saver-extension/docs/README_HUMAN.md).*
 
 ## Technical Details
 
