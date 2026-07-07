@@ -9,5 +9,6 @@ Thumbs.db
 *.crx
 *.pem
 
-# Zips
+# Zips and binaries
 *.zip
+*.xpi
