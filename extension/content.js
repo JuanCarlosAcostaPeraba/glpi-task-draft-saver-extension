@@ -517,45 +517,61 @@
     toast.id = toastId;
     toast.className = 'glpi-draft-saver-toast restore-prompt';
     
-    if (isEdit) {
-      toast.innerHTML = `
-        <div><strong>Borrador de Edición de ${config.label}</strong></div>
-        <div style="font-size: 11px; opacity: 0.8;">Guardado: ${savedDate}</div>
-        <div class="toast-actions">
-          <button class="glpi-btn-copy">Copiar</button>
-          <button class="glpi-btn-dismiss secondary">Ignorar</button>
-        </div>
-      `;
-    } else {
-      toast.innerHTML = `
-        <div><strong>Borrador de ${config.label}</strong></div>
-        <div style="font-size: 11px; opacity: 0.8;">Guardado: ${savedDate}</div>
-        <div class="toast-actions">
-          <button class="glpi-btn-restore">Restaurar</button>
-          <button class="glpi-btn-copy secondary">Copiar</button>
-          <button class="glpi-btn-dismiss secondary">Ignorar</button>
-        </div>
-      `;
+    // Title wrapper
+    const titleDiv = document.createElement('div');
+    const titleStrong = document.createElement('strong');
+    titleStrong.textContent = isEdit ? `Borrador de Edición de ${config.label}` : `Borrador de ${config.label}`;
+    titleDiv.appendChild(titleStrong);
+    toast.appendChild(titleDiv);
+    
+    // Subtitle wrapper
+    const subtitleDiv = document.createElement('div');
+    subtitleDiv.style.fontSize = '11px';
+    subtitleDiv.style.opacity = '0.8';
+    subtitleDiv.textContent = `Guardado: ${savedDate}`;
+    toast.appendChild(subtitleDiv);
+    
+    // Actions container
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'toast-actions';
+    
+    let restoreBtn = null;
+    if (!isEdit) {
+      restoreBtn = document.createElement('button');
+      restoreBtn.className = 'glpi-btn-restore';
+      restoreBtn.textContent = 'Restaurar';
+      actionsDiv.appendChild(restoreBtn);
     }
-
+    
+    const copyBtn = document.createElement('button');
+    copyBtn.className = isEdit ? 'glpi-btn-copy' : 'glpi-btn-copy secondary';
+    copyBtn.textContent = 'Copiar';
+    actionsDiv.appendChild(copyBtn);
+    
+    const dismissBtn = document.createElement('button');
+    dismissBtn.className = 'glpi-btn-dismiss secondary';
+    dismissBtn.textContent = 'Ignorar';
+    actionsDiv.appendChild(dismissBtn);
+    
+    toast.appendChild(actionsDiv);
     toastContainer.appendChild(toast);
     
     // Trigger animation
     setTimeout(() => toast.classList.add('show'), 10);
 
-    if (!isEdit) {
-      toast.querySelector('.glpi-btn-restore').onclick = () => {
+    if (restoreBtn) {
+      restoreBtn.onclick = () => {
           handleRestoreAction(draftData);
           hideToast(toast);
       };
     }
 
-    toast.querySelector('.glpi-btn-copy').onclick = async () => {
+    copyBtn.onclick = async () => {
         await copyToClipboard(draftData.content);
         showStatusToast('Copiado al portapapeles');
     };
 
-    toast.querySelector('.glpi-btn-dismiss').onclick = () => {
+    dismissBtn.onclick = () => {
         if (confirm("¿Estás seguro de que deseas ignorar y eliminar este borrador?")) {
             log(`User dismissed and deleted ${draftData.type} draft.`);
             try { localStorage.removeItem(draftData.storageKey); } catch (e) {}
@@ -569,7 +585,11 @@
 
     const toast = document.createElement('div');
     toast.className = `glpi-draft-saver-toast ${extraClass}`;
-    toast.innerHTML = `<div>${message}</div>`;
+    
+    const contentWrapper = document.createElement('div');
+    contentWrapper.textContent = message;
+    toast.appendChild(contentWrapper);
+    
     toastContainer.appendChild(toast);
 
     setTimeout(() => toast.classList.add('show'), 10);
