@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "GLPI Draft Saver Pro",
+  "version": "2.1.2",
+  "description": "Automatically saves drafts for tasks, follow-ups, solutions, and validations in GLPI.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Configuración de GLPI Draft Saver"
+  },
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://*.huc.es/front/ticket.form.php*",
+    "https://10.137.96.244/front/ticket.form.php*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.huc.es/front/ticket.form.php*",
+        "https://10.137.96.244/front/ticket.form.php*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.huc.es/front/ticket.form.php*",
+        "https://10.137.96.244/front/ticket.form.php*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "style.css"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
