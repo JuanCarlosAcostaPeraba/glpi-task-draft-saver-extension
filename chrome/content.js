@@ -650,10 +650,17 @@
     return (id && /^\d+$/.test(id)) ? id : null;
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+  // Do not initialize the active extension runtime loop under unit test runner (Node/Jest)
+  const isTestEnv = typeof module !== 'undefined' && module.exports;
+  if (!isTestEnv) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
   } else {
-    init();
+    // In test environments, we still need ticketId to be populated if window.location has it
+    ticketId = getValidatedTicketId();
   }
 
   // Export functions for unit testing in Node environment
