@@ -1,5 +1,6 @@
 /**
  * @jest-environment jsdom
+ * @jest-environment-options {"url": "https://example.com/front/ticket.form.php?id=123"}
  */
 
 describe('Chrome Extension - content.js', () => {
@@ -8,10 +9,6 @@ describe('Chrome Extension - content.js', () => {
   beforeEach(() => {
     // Reset DOM
     document.body.innerHTML = '';
-    
-    // Set up location
-    delete window.location;
-    window.location = new URL('https://example.com/front/ticket.form.php?id=123');
     
     // Clear cache/require to clean up module state
     jest.resetModules();
