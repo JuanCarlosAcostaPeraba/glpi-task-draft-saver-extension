@@ -1,0 +1,63 @@
+name: Create Automatic Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: get_version
+        run: |
+          VERSION=$(jq -r .version chrome/manifest.json)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if Tag Exists
+        id: check_tag
+        run: |
+          if git rev-parse "v${{ env.VERSION }}" >/dev/null 2>&1; then
+            echo "Tag v${{ env.VERSION }} already exists. Skipping release creation."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Package Extensions
+        if: steps.check_tag.outputs.exists != 'true'
+        run: |
+          # Package Chrome
+          cd chrome
+          zip -r ../glpi-draft-saver-pro-chrome-v${{ env.VERSION }}.zip *
+          cd ..
+          
+          # Package Firefox
+          cd firefox
+          zip -r ../glpi-draft-saver-pro-firefox-v${{ env.VERSION }}.zip *
+          cd ..
+
+      - name: Create Release and Upload Assets
+        if: steps.check_tag.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          files: |
+            glpi-draft-saver-pro-chrome-v${{ env.VERSION }}.zip
+            glpi-draft-saver-pro-firefox-v${{ env.VERSION }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

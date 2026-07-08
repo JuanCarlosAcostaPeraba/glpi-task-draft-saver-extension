@@ -1,0 +1,17 @@
+{
+  "name": "glpi-task-draft-saver-extension",
+  "version": "2.1.2",
+  "description": "GLPI Draft Saver Pro extension for Chrome and Firefox",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "packageManager": "pnpm@11.10.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "devDependencies": {
+    "jest": "30.4.2",
+    "jest-environment-jsdom": "30.4.1"
+  }
+}
