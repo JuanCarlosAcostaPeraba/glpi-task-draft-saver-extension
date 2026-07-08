@@ -1,0 +1,56 @@
+name: Publish to Web Stores
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish-chrome:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        run: |
+          VERSION=$(jq -r .version chrome/manifest.json)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Package Chrome Extension
+        run: |
+          cd chrome
+          zip -r ../glpi-draft-saver-pro-chrome-v${{ env.VERSION }}.zip *
+
+      - name: Publish to Chrome Web Store
+        uses: mnao305/chrome-extension-upload@v5.0.0
+        with:
+          file-path: glpi-draft-saver-pro-chrome-v${{ env.VERSION }}.zip
+          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
+          client-id: ${{ secrets.CHROME_CLIENT_ID }}
+          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          publish: true
+
+  publish-firefox:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        run: |
+          VERSION=$(jq -r .version firefox/manifest.json)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Package Firefox Extension
+        run: |
+          cd firefox
+          zip -r ../glpi-draft-saver-pro-firefox-v${{ env.VERSION }}.zip *
+
+      - name: Publish to Firefox Add-ons (AMO)
+        uses: wdzeng/firefox-addon@v1
+        with:
+          addon-guid: ${{ secrets.FIREFOX_ADDON_GUID }}
+          xpi-path: glpi-draft-saver-pro-firefox-v${{ env.VERSION }}.zip
+          jwt-issuer: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          jwt-secret: ${{ secrets.FIREFOX_JWT_SECRET }}

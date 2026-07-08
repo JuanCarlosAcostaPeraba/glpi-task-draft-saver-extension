@@ -16,23 +16,32 @@
     }
 
     // 1. Initial Load
-    chrome.storage.sync.get({
-        toastPosition: 'bottom-right',
-        theme: 'light'
-    }, (items) => {
-        updateDOMAttributes(items);
-    });
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+        chrome.storage.sync.get({
+            toastPosition: 'bottom-right',
+            theme: 'light'
+        }, (items) => {
+            updateDOMAttributes(items);
+        });
+    }
 
     // 2. Listen for changes
-    chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'sync') {
-            const newValues = {};
-            for (let [key, { newValue }] of Object.entries(changes)) {
-                newValues[key] = newValue;
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area === 'sync') {
+                const newValues = {};
+                for (let [key, { newValue }] of Object.entries(changes)) {
+                    newValues[key] = newValue;
+                }
+                updateDOMAttributes(newValues);
             }
-            updateDOMAttributes(newValues);
-        }
-    });
+        });
+    }
+
+    // Export functions for unit testing in Node environment
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = { updateDOMAttributes };
+    }
 
 })();
 

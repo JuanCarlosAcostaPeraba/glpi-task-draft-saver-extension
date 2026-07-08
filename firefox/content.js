@@ -656,4 +656,14 @@
     init();
   }
 
+  // Export functions for unit testing in Node environment
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      getEditorConfig,
+      findEditButton,
+      getValidatedTicketId,
+      DRAFT_TYPES
+    };
+  }
+
 })();

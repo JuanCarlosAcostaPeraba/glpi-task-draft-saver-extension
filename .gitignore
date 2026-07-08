@@ -12,3 +12,7 @@ Thumbs.db
 # Zips and binaries
 *.zip
 *.xpi
+
+# Node.js
+node_modules/
+coverage/
