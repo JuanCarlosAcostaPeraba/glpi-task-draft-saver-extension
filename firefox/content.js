@@ -344,8 +344,15 @@
       }
 
       // 2. Escanear las claves de localStorage que empiecen con los prefijos configurados
+      const keys = [];
       for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+        keys.push(localStorage.key(i));
+      }
+
+      const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+      const FIVE_MINUTES_MS = 5 * 60 * 1000;
+
+      for (const key of keys) {
         if (!key) continue;
 
         for (const [type, config] of Object.entries(DRAFT_TYPES)) {
@@ -356,6 +363,25 @@
             const draftData = JSON.parse(rawData);
             draftData.type = draftData.type || type;
             draftData.storageKey = key;
+
+            // Check for 24-hour expiration
+            const savedTime = draftData.savedAt ? new Date(draftData.savedAt).getTime() : Date.now();
+            const submittedTime = draftData.submittedAt ? new Date(draftData.submittedAt).getTime() : 0;
+            const referenceTime = Math.max(savedTime, submittedTime);
+            
+            if (Date.now() - referenceTime > ONE_DAY_MS) {
+              log(`Draft for ${key} has expired (older than 24 hours). Deleting.`);
+              localStorage.removeItem(key);
+              continue;
+            }
+
+            // Check if this draft was marked as submitted
+            if (draftData.submitted === true) {
+              if (Date.now() - submittedTime > FIVE_MINUTES_MS) {
+                log(`Submitted draft for ${key} is older than 5 minutes. Skipping restore prompt.`);
+                continue; // Keep in localStorage but do not prompt the user automatically
+              }
+            }
 
             // Omitir si ya tiene contenido en pantalla
             const existingEditor = activeEditors.get(key);
@@ -624,11 +650,60 @@
       const parentForm = data.textarea.closest('form');
       if (parentForm) {
         parentForm.addEventListener('submit', () => {
-          log(`Form for ${data.label} submitted. Cleaning up draft.`);
+          log(`Form for ${data.label} submitted. Marking draft as submitted.`);
           try {
-            localStorage.removeItem(storageKey);
+            const rawData = localStorage.getItem(storageKey);
+            let draftData = null;
+            if (rawData) {
+              draftData = JSON.parse(rawData);
+            } else {
+              data.editor.save();
+              const currentHtml = data.editor.getContent();
+              draftData = {
+                ticketId: ticketId,
+                type: data.type,
+                itemId: data.itemId,
+                content: currentHtml,
+                savedAt: new Date().toISOString()
+              };
+            }
+            draftData.submitted = true;
+            draftData.submittedAt = Date.now();
+            localStorage.setItem(storageKey, JSON.stringify(draftData));
+
+            // Start polling to detect successful AJAX submission (editor cleared)
+            let pollAttempts = 0;
+            const maxPollAttempts = 10; // Poll for 10 seconds
+            const pollInterval = setInterval(() => {
+              pollAttempts++;
+              
+              let isCleared = false;
+              const currentEditor = activeEditors.get(storageKey);
+              if (currentEditor && currentEditor.editor) {
+                const plainText = htmlToPlainText(currentEditor.editor.getContent()).trim();
+                if (plainText === '') {
+                  isCleared = true;
+                }
+              }
+
+              if (isCleared) {
+                log(`Form submission success detected for ${data.label} (Editor cleared). Deleting draft.`);
+                clearInterval(pollInterval);
+                try {
+                  localStorage.removeItem(storageKey);
+                } catch (err) {
+                  log(`Error removing draft ${storageKey} on success check:`, err);
+                }
+              }
+
+              if (pollAttempts >= maxPollAttempts) {
+                clearInterval(pollInterval);
+                log(`Polling finished for ${data.label}. Draft remains in localStorage.`);
+              }
+            }, 1000);
+
           } catch (e) {
-            log(`Error cleaning up draft ${storageKey} on submit:`, e);
+            log(`Error marking draft ${storageKey} as submitted:`, e);
           }
         });
       }
