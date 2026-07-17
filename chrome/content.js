@@ -105,6 +105,17 @@
     document.addEventListener('click', () => {
       startTinyMCEDetectionPolling(true);
     });
+
+    // Listen to deletions from the drafts visualizer page
+    document.addEventListener('GLPIDraftSaverRemoveLocal', (e) => {
+      const { key } = e.detail;
+      log(`Draft deleted from visualizer. Cleaning up localStorage key: ${key}`);
+      try {
+        localStorage.removeItem(key);
+      } catch (err) {
+        log(`Error cleaning up localStorage key ${key} from visualizer:`, err);
+      }
+    });
   }
 
 
@@ -318,10 +329,14 @@
             type: data.type,
             itemId: data.itemId,
             content: currentHtml,
-            savedAt: new Date().toISOString()
+            savedAt: new Date().toISOString(),
+            url: window.location.href
           };
           
           localStorage.setItem(storageKey, JSON.stringify(draftData));
+          document.dispatchEvent(new CustomEvent('GLPIDraftSaverSave', {
+            detail: { key: storageKey, data: draftData }
+          }));
           data.lastSavedContent = currentHtml;
           showStatusToast(`Borrador de ${data.label} guardado`);
         }
@@ -364,6 +379,11 @@
             draftData.type = draftData.type || type;
             draftData.storageKey = key;
 
+            // Sync to chrome.storage.local
+            document.dispatchEvent(new CustomEvent('GLPIDraftSaverSave', {
+              detail: { key: key, data: draftData }
+            }));
+
             // Check for 24-hour expiration
             const savedTime = draftData.savedAt ? new Date(draftData.savedAt).getTime() : Date.now();
             const submittedTime = draftData.submittedAt ? new Date(draftData.submittedAt).getTime() : 0;
@@ -372,6 +392,9 @@
             if (Date.now() - referenceTime > ONE_DAY_MS) {
               log(`Draft for ${key} has expired (older than 24 hours). Deleting.`);
               localStorage.removeItem(key);
+              document.dispatchEvent(new CustomEvent('GLPIDraftSaverDelete', {
+                detail: { key: key }
+              }));
               continue;
             }
 
@@ -664,12 +687,19 @@
                 type: data.type,
                 itemId: data.itemId,
                 content: currentHtml,
-                savedAt: new Date().toISOString()
+                savedAt: new Date().toISOString(),
+                url: window.location.href
               };
             }
             draftData.submitted = true;
             draftData.submittedAt = Date.now();
+            if (!draftData.url) {
+              draftData.url = window.location.href;
+            }
             localStorage.setItem(storageKey, JSON.stringify(draftData));
+            document.dispatchEvent(new CustomEvent('GLPIDraftSaverSave', {
+              detail: { key: storageKey, data: draftData }
+            }));
 
             // Start polling to detect successful AJAX submission (editor cleared)
             let pollAttempts = 0;
@@ -691,6 +721,9 @@
                 clearInterval(pollInterval);
                 try {
                   localStorage.removeItem(storageKey);
+                  document.dispatchEvent(new CustomEvent('GLPIDraftSaverDelete', {
+                    detail: { key: storageKey }
+                  }));
                 } catch (err) {
                   log(`Error removing draft ${storageKey} on success check:`, err);
                 }

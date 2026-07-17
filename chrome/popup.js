@@ -66,6 +66,14 @@ document.addEventListener('DOMContentLoaded', () => {
       theme: theme
     }, showStatus);
   });
+
+  // Open Drafts Visualizer
+  const openDraftsBtn = document.getElementById('open-drafts-btn');
+  if (openDraftsBtn) {
+    openDraftsBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: 'drafts.html' });
+    });
+  }
 });
 
 
